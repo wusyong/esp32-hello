@@ -15,4 +15,3 @@ $IDF_PATH/components/esptool_py/esptool/esptool.py \
 	--flash_size "2MB" \
 	-o $TARGET_DIR/esp32-hello.bin \
 	$TARGET_DIR/esp32-hello
-    

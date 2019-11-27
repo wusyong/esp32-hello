@@ -7,7 +7,7 @@ edition = "2018"
 esp32-sys = { path = "esp32-sys" }
 
 [profile.dev]
-lto = false 
+lto = false
 incremental = false
 debug = false # debug adds frame pointers - which must be omitted
 codegen-units = 1
@@ -17,3 +17,7 @@ lto = false
 incremental = false
 debug = false # debug adds frame pointers - which must be omitted
 codegen-units = 1
+
+[build-dependencies]
+bindgen = "0.51.1"
+globwalk = "0.7.1"
