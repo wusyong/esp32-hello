@@ -1,10 +1,8 @@
-[package]
-name = "esp32-hello"
-version = "0.1.0"
-edition = "2018"
-
-[dependencies]
-esp32-sys = { path = "esp32-sys" }
+[workspace]
+members = [
+  "esp32-sys",
+  "app",
+]
 
 [profile.dev]
 lto = false
@@ -17,7 +15,3 @@ lto = false
 incremental = false
 debug = false # debug adds frame pointers - which must be omitted
 codegen-units = 1
-
-[build-dependencies]
-bindgen = "0.51.1"
-globwalk = "0.7.1"

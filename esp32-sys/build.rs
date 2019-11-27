@@ -1,4 +1,4 @@
-use std::{env, error::Error, fs::{read_to_string, File}, io::{BufReader, BufRead, Read, Write}, path::PathBuf, process::{Command, Stdio}};
+use std::{env, error::Error, fs::{read_to_string, File}, io::{BufReader, BufRead, Write}, path::PathBuf, process::{Command, Stdio}};
 
 fn main() -> Result<(), Box<dyn Error>> {
   println!("cargo:rerun-if-changed=src/bindings.h");

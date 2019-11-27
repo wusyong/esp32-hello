@@ -25,7 +25,7 @@
 #include <esp_crosscore_int.h>
 #include <esp_dbg_stubs.h>
 #include <esp_deep_sleep.h>
-#include <esp_deepsleep.h>
+#include <esp_sleep.h>
 #include <esp_dport_access.h>
 #include <esp_err.h>
 #include <esp_event_legacy.h>
