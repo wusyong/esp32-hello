@@ -1,10 +1,8 @@
-use std::{env, error::Error, fs::{read_to_string, File}, io::{BufReader, BufRead, Write}, path::PathBuf, process::{Command, Stdio}};
+use std::{env, error::Error, fs::read_to_string, io::{BufReader, BufRead, Write}, path::PathBuf, process::{Command, Stdio}};
 
 fn main() -> Result<(), Box<dyn Error>> {
   println!("cargo:rerun-if-changed=src/bindings.h");
   println!("cargo:rerun-if-changed=src/sdkconfig.h");
-
-  let target_dir = PathBuf::from(env::var("CARGO_TARGET_DIR")?);
 
   let esp_path = PathBuf::from(env::var("ESP_PATH")?);
   let idf_path = PathBuf::from(env::var("IDF_PATH")?);
@@ -45,7 +43,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .unwrap();
 
       let mut stdin = child.stdin.take().unwrap();
-      let mut stdout = child.stdout.take().unwrap();
+      let stdout = child.stdout.take().unwrap();
 
       writeln!(stdin, "{}", contents).unwrap();
 
@@ -71,8 +69,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 
   includes.sort();
   includes.dedup();
-
-  let sdkconfig = include_str!("src/sdkconfig.h");
 
   let bindings = bindgen::Builder::default()
     .use_core()
