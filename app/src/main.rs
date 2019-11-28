@@ -1,11 +1,9 @@
 #![no_std]
 #![no_main]
 
-extern crate esp32_sys;
-
 use core::panic::PanicInfo;
 use core::ptr;
-use esp32_sys::*;
+use esp_idf_sys::*;
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {

@@ -1,6 +1,6 @@
 [workspace]
 members = [
-  "esp32-sys",
+  "esp-idf-sys",
   "app",
 ]
 

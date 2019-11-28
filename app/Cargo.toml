@@ -4,4 +4,4 @@ version = "0.1.0"
 edition = "2018"
 
 [dependencies]
-esp32-sys = { path = "../esp32-sys" }
+esp-idf-sys = { path = "../esp-idf-sys" }
