@@ -6,6 +6,24 @@ extern crate alloc;
 use core::alloc::{GlobalAlloc, Layout};
 use core::marker::PhantomData;
 
+/// # Usage
+///
+/// ```
+/// #![feature(alloc_error_handler)]
+///
+/// use core::alloc::Layout;
+///
+/// use alloc_esp32::Esp32Heap;
+///
+/// #[global_allocator]
+/// static HEAP: Esp32Heap = Esp32Heap::system();
+///
+///
+/// #[alloc_error_handler]
+/// fn on_oom(_layout: Layout) -> ! {
+///   loop {}
+/// }
+/// ```
 pub struct Esp32Heap<T = ()> { heap: PhantomData<T> }
 
 impl Esp32Heap {
