@@ -1,2 +1,3 @@
+app/src/wifi_credentials.rs
 /target
 Cargo.lock

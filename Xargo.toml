@@ -1,0 +1,5 @@
+[dependencies]
+std = {}
+
+[patch.crates-io]
+libc = { git = "https://github.com/reitermarkus/libc", branch = "xtensa-support" }

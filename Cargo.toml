@@ -1,17 +1,19 @@
 [workspace]
 members = [
   "esp-idf-sys",
+  "esp32-hal",
+  "alloc-esp32",
   "app",
 ]
 
 [profile.dev]
-lto = false
-incremental = false
-debug = false # debug adds frame pointers - which must be omitted
-codegen-units = 1
+debug = false
+panic = "unwind"
 
 [profile.release]
-lto = false
-incremental = false
-debug = false # debug adds frame pointers - which must be omitted
-codegen-units = 1
+lto = true
+debug = false
+panic = "unwind"
+
+[patch.crates-io]
+libc = { git = "https://github.com/reitermarkus/libc", branch = "xtensa-support" }

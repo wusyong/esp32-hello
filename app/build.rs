@@ -1,6 +1,10 @@
 use std::{env, error::Error, fs::{remove_file, File}, io::stderr, os::unix::{fs::symlink, io::{FromRawFd, AsRawFd}}, path::PathBuf, process::{Command, Stdio}};
 
 fn main() -> Result<(), Box<dyn Error>> {
+  println!("cargo:rerun-if-changed=Makefile");
+  println!("cargo:rerun-if-changed=partitions.csv");
+  println!("cargo:rerun-if-changed=sdkconfig");
+
   let target_dir = PathBuf::from(env::var("CARGO_TARGET_DIR")?);
 
   let idf_path = PathBuf::from(env::var("IDF_PATH")?);
@@ -17,6 +21,15 @@ fn main() -> Result<(), Box<dyn Error>> {
   }
 
   let stderr = unsafe { File::from_raw_fd(stderr().as_raw_fd()) };
+  let status = Command::new("make")
+    .arg("-j")
+    .arg("bootloader")
+    .stdout(Stdio::from(stderr.try_clone()?))
+    .stderr(Stdio::from(stderr.try_clone()?))
+    .status()?;
+
+  assert!(status.success());
+
   let status = Command::new("make")
     .arg("-j")
     .arg("app")
