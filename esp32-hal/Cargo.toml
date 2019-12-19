@@ -1,0 +1,15 @@
+[package]
+name = "esp32-hal"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+bitflags = "1"
+esp-idf-sys = { path = "../esp-idf-sys" }
+embedded-hal = { version = "0.2", features = ["unproven"] }
+static_assertions = "1"
+
+[features]
+default = []
+
+panic_handler = []
