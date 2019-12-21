@@ -16,6 +16,7 @@ use esp_idf_sys::{
   esp_event_loop_create_default,
   esp_err_t,
   wifi_mode_t,
+  wifi_ap_config_t,
   esp_wifi_get_mode,
   xTaskGetCurrentTaskHandle,
 
@@ -33,7 +34,6 @@ use esp_idf_sys::{
   wifi_scan_threshold_t,
   wifi_event_sta_connected_t,
   wifi_event_sta_disconnected_t,
-  ESP_EVENT_ANY_ID,
   wifi_scan_method_t,
   wifi_sort_method_t,
   wifi_auth_mode_t,
@@ -60,13 +60,12 @@ use esp_idf_sys::{
   esp_wifi_scan_get_ap_num,
   wifi_ap_record_t,
   esp_wifi_scan_get_ap_records,
-  xTaskCreatePinnedToCore,
+  tcpip_adapter_init,
 };
 
-use esp_idf_sys::tcpip_adapter_init;
-
-pub fn tcpip_init() {
+pub fn netif_init() -> Result<(), EspError> {
   unsafe { tcpip_adapter_init() };
+  Ok(())
 }
 
 pub fn wifi_init(nvs: &mut NonVolatileStorage) -> Result<(), EspError> {
@@ -133,7 +132,7 @@ pub struct Wifi<T = ()> {
 
 impl Wifi {
   pub fn init(nvs: &mut NonVolatileStorage) -> Wifi<()> {
-    tcpip_init();
+    netif_init().unwrap();
 
     match event_loop_create_default() {
       Ok(()) => (),
@@ -141,6 +140,28 @@ impl Wifi {
       err => err.unwrap(),
     }
     wifi_init(nvs).unwrap();
+
+    Wifi { mode: PhantomData }
+  }
+
+  pub fn into_ap(self, config: &ApConfig) -> Wifi<Ap> {
+    let ssid_len = config.ssid.iter().take_while(|&&c| c != 0).count();
+
+    let mut config = wifi_config_t {
+      ap: wifi_ap_config_t {
+        ssid: config.ssid,
+        ssid_len: ssid_len as u8,
+        password: config.password,
+        channel: config.channel,
+        authmode: config.auth_mode.into(),
+        ssid_hidden: config.ssid_hidden as u8,
+        max_connection: 4,
+        beacon_interval: 0,
+      },
+    };
+
+    set_mode(wifi_mode_t::WIFI_MODE_AP).unwrap();
+    set_config(esp_interface_t::ESP_IF_WIFI_AP, &mut config).unwrap();
 
     Wifi { mode: PhantomData }
   }
@@ -162,13 +183,9 @@ impl Wifi {
     };
 
     let threshold = if let Some(threshold) = config.threshold {
-      let authmode = match threshold.auth_mode {
-        AuthMode::Open => wifi_auth_mode_t::WIFI_AUTH_OPEN,
-      };
-
       wifi_scan_threshold_t {
         rssi: threshold.rssi,
-        authmode,
+        authmode: threshold.auth_mode.into(),
       }
     } else {
       wifi_scan_threshold_t {
@@ -226,6 +243,84 @@ unsafe extern "C" fn wifi_scan_done_handler(
 pub struct Sta;
 pub struct Ap;
 
+pub struct ApConfig {
+  ssid: [u8; 32],
+  password: [u8; 64],
+  channel: u8,
+  auth_mode: AuthMode,
+  max_connection: u8,
+  ssid_hidden: bool,
+  beacon_interval: u16,
+}
+
+impl ApConfig {
+  pub fn builder() -> ApConfigBuilder {
+    ApConfigBuilder::default()
+  }
+}
+
+pub struct ApConfigBuilder {
+  ssid: Option<[u8; 32]>,
+  password: [u8; 64],
+  channel: u8,
+  auth_mode: AuthMode,
+  max_connection: u8,
+  ssid_hidden: bool,
+  beacon_interval: u16,
+}
+
+impl Default for ApConfigBuilder {
+  fn default() -> Self {
+    Self {
+      ssid: Default::default(),
+      password: [0; 64],
+      channel: 0,
+      auth_mode: AuthMode::Open,
+      max_connection: 4,
+      ssid_hidden: false,
+      beacon_interval: 100,
+    }
+  }
+}
+
+impl ApConfigBuilder {
+  pub fn ssid(&mut self, ssid: impl AsRef<str>) -> &mut Self {
+    let mut ssid_buf: [u8; 32] = [0; 32];
+
+    for (i, c) in ssid.as_ref().chars().take(31).enumerate()  {
+      ssid_buf[i] = c as u8;
+    }
+
+    self.ssid = Some(ssid_buf);
+
+    self
+  }
+
+  pub fn password(&mut self, password: impl AsRef<str>) -> &mut Self {
+    let mut password_buf: [u8; 64] = [0; 64];
+
+    for (i, c) in password.as_ref().chars().take(63).enumerate()  {
+      password_buf[i] = c as u8;
+    }
+
+    self.password = password_buf;
+
+    self
+  }
+
+  pub fn build(&self) -> ApConfig {
+    ApConfig {
+      ssid: self.ssid.unwrap(),
+      password: self.password,
+      channel: self.channel,
+      auth_mode: self.auth_mode,
+      max_connection: self.max_connection,
+      ssid_hidden: self.ssid_hidden,
+      beacon_interval: self.beacon_interval,
+    }
+  }
+}
+
 pub struct StaConfig {
   ssid: [u8; 32],
   password: [u8; 64],
@@ -246,6 +341,16 @@ pub struct ScanThreshold {
 #[derive(Clone, Copy)]
 pub enum AuthMode {
   Open,
+  Wpa2Psk,
+}
+
+impl From<AuthMode> for wifi_auth_mode_t {
+  fn from(auth_mode: AuthMode) -> wifi_auth_mode_t {
+    match auth_mode {
+      AuthMode::Open => wifi_auth_mode_t::WIFI_AUTH_OPEN,
+      AuthMode::Wpa2Psk => wifi_auth_mode_t::WIFI_AUTH_WPA2_PSK,
+    }
+  }
 }
 
 #[derive(Clone, Copy)]
@@ -273,9 +378,31 @@ impl Default for SortMethod {
 
 #[must_use = "WiFi will be stopped immediately. Drop it explicitly after you are done using it or create a named binding."]
 #[derive(Debug)]
-pub struct WifiRunning(pub [u8; 4]);
+pub struct StaRunning(pub [u8; 4]);
 
-impl Drop for WifiRunning {
+#[must_use = "WiFi will be stopped immediately. Drop it explicitly after you are done using it or create a named binding."]
+#[derive(Debug)]
+pub struct ApRunning;
+
+impl ApRunning {
+  pub fn stop(self) -> Wifi<()> {
+    Wifi { mode: PhantomData }
+  }
+}
+
+impl StaRunning {
+  pub fn stop(self) -> Wifi<()> {
+    Wifi { mode: PhantomData }
+  }
+}
+
+impl Drop for ApRunning {
+  fn drop(&mut self) {
+    let _ = wifi_stop();
+  }
+}
+
+impl Drop for StaRunning {
   fn drop(&mut self) {
     let _ = wifi_stop();
   }
@@ -314,10 +441,10 @@ impl Default for StaConfigBuilder {
 }
 
 impl StaConfigBuilder {
-  pub fn ssid(&mut self, ssid: &str) -> &mut Self {
+  pub fn ssid(&mut self, ssid: impl AsRef<str>) -> &mut Self {
     let mut ssid_buf: [u8; 32] = [0; 32];
 
-    for (i, c) in ssid.chars().take(31).enumerate()  {
+    for (i, c) in ssid.as_ref().chars().take(31).enumerate()  {
       ssid_buf[i] = c as u8;
     }
 
@@ -326,10 +453,10 @@ impl StaConfigBuilder {
     self
   }
 
-  pub fn password(&mut self, password: &str) -> &mut Self {
+  pub fn password(&mut self, password: impl AsRef<str>) -> &mut Self {
     let mut password_buf: [u8; 64] = [0; 64];
 
-    for (i, c) in password.chars().take(63).enumerate()  {
+    for (i, c) in password.as_ref().chars().take(63).enumerate()  {
       password_buf[i] = c as u8;
     }
 
@@ -352,6 +479,13 @@ impl StaConfigBuilder {
   }
 }
 
+impl Wifi<Ap> {
+  pub fn start(self) -> ApRunning {
+    wifi_start().unwrap();
+    ApRunning
+  }
+}
+
 impl Wifi<Sta> {
   pub fn connect(self) -> ConnectFuture {
     ConnectFuture { state: ConnectFutureState::Starting }
@@ -363,6 +497,12 @@ enum ConnectFutureState {
   Failed(WifiError),
   Starting,
   Connected([u8; 4]),
+}
+
+impl WifiError {
+  pub fn wifi(self) -> Wifi<()> {
+    Wifi { mode: PhantomData }
+  }
 }
 
 #[must_use = "futures do nothing unless polled"]
@@ -397,7 +537,7 @@ impl core::fmt::Display for WifiError {
 }
 
 impl core::future::Future for ConnectFuture {
-  type Output = Result<WifiRunning, WifiError>;
+  type Output = Result<StaRunning, WifiError>;
 
   fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
     match &self.state {
@@ -430,9 +570,12 @@ impl core::future::Future for ConnectFuture {
 
         match *state {
           ConnectFutureState::Starting => unreachable!(),
-          ConnectFutureState::Failed(ref err) => Poll::Ready(Err(err.clone().into())),
+          ConnectFutureState::Failed(ref err) => {
+            let _ = wifi_stop();
+            Poll::Ready(Err(err.clone().into()))
+          },
           ConnectFutureState::Connected(ip) => {
-            Poll::Ready(Ok(WifiRunning(ip)))
+            Poll::Ready(Ok(StaRunning(ip)))
           }
         }
       }
