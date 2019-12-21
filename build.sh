@@ -6,6 +6,8 @@ serial_port=
 
 if [ -e /dev/tty.usbserial-1420 ]; then
   serial_port=/dev/tty.usbserial-1420
+elif [ -e /dev/tty.usbserial-1440 ]; then
+  serial_port=/dev/tty.usbserial-1440
 elif [ -e /dev/cu.SLAB_USBtoUART ]; then
   serial_port=/dev/cu.SLAB_USBtoUART
 fi
