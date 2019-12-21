@@ -113,3 +113,26 @@ impl core::fmt::Display for EspError {
     Ok(())
   }
 }
+
+#[repr(C)]
+pub enum MacAddressType {
+  Sta,
+  Ap,
+  Bt,
+  Eth,
+}
+
+pub fn mac_address(t: MacAddressType) -> [u8; 6] {
+  use esp_idf_sys::{esp_read_mac, esp_mac_type_t};
+
+  let t = match t {
+    MacAddressType::Sta => esp_idf_sys::esp_mac_type_t::ESP_MAC_WIFI_STA,
+    MacAddressType::Ap  => esp_idf_sys::esp_mac_type_t::ESP_MAC_WIFI_SOFTAP,
+    MacAddressType::Bt  => esp_idf_sys::esp_mac_type_t::ESP_MAC_BT,
+    MacAddressType::Eth => esp_idf_sys::esp_mac_type_t::ESP_MAC_ETH,
+  };
+
+  let mut mac_address = [0; 6];
+  unsafe { esp_read_mac(&mut mac_address as *mut _ as *mut _, t) };
+  mac_address
+}
