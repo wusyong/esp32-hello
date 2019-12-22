@@ -4,13 +4,94 @@
     <meta charset='utf-8'>
     <meta name='viewport' content='width=device-width, initial-scale=1, shrink-to-fit=no'>
     <title></title>
+    <style>
+      body {
+        font-family: sans-serif;
+        max-width: 24em;
+        padding: 1em;
+        margin: 0 auto;
+      }
+
+      input, label {
+        -webkit-appearance: none;
+        box-sizing: border-box;
+        font-size: 1em;
+        padding: 0.75em 1em;
+        margin: 0 0 .5em 0;
+        float: left;
+      }
+
+      input {
+        outline: none;
+        border: 1px solid rgba(0, 0, 0, 0.1);
+        border-radius: 0.3em;
+      }
+
+      input[type='text'], input[type='submit'], input[type='password'] {
+        width: 100%;
+      }
+
+      input[type='submit'] {
+        background-color: #0096ff;
+        color: #fff;
+      }
+
+      input[type='checkbox'] {
+        float: right;
+        position: relative;
+        width: 50px;
+        height: 30px;
+        background-color: #ffffff;
+        border: 1px solid #D9DADC;
+        border-radius: 50px;
+        box-shadow: inset -20px 0 0 0 #ffffff;
+        transition-duration: 200ms;
+      }
+
+      input[type='checkbox']:after {
+        content: '';
+        position: absolute;
+        top: 1px; left: 1px;
+        width: 26px;
+        height: 26px;
+        background-color: transparent;
+        border-radius: 50%;
+        box-shadow: 2px 4px 6px rgba(0, 0, 0, 0.2);
+        transition-duration: 200ms;
+      }
+
+      input[type='checkbox']:checked {
+        border-color: #4ED164;
+        box-shadow: inset 20px 0 0 0 #4ED164;
+      }
+
+      input[type='checkbox']:checked:after {
+        left: 20px;
+        box-shadow: -2px 4px 3px rgba(0, 0, 0, 0.05);
+      }
+
+      label {
+        padding-left: 0;
+        line-height: 0.5em;
+      }
+    </style>
+    <script type='text/javascript'>
+      function showPassword(checkbox) {
+        var x = document.getElementById('password');
+
+        if (checkbox.checked) {
+          x.type = 'text'
+        } else {
+          x.type = 'password'
+        }
+      }
+    </script>
   </head>
   <body>
     <form action='/connect' method='post'>
-      <input name='ssid' type='text' length='32' maxlength='31' placeholder='SSID'>
-      <br>
-      <input name='password' type='password' length='64' maxlength='63' placeholder='Password'>
-      <br>
+      <input name='ssid' type='text' maxlength='31' placeholder='SSID'>
+      <input id='password' name='password' type='password' maxlength='63' placeholder='Password'>
+      <input id='show-password' type='checkbox' onclick='showPassword(this)'> <label for='show-password'>Show Password</label>
       <input type='submit' value='Connect'>
     </form>
   </body>
