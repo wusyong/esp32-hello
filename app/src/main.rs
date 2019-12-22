@@ -92,7 +92,7 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
       .stack_size(8192)
       .spawn(move || block_on(async {
         let mac = mac_address(MacAddressType::Ap);
-        let ssid = format!("ESP {}", mac.iter().map(|h| format!("{:02X}", h)).collect::<Vec<_>>().join(""));
+        let ssid = format!("ESP {:#}", mac);
         println!("Starting Access Point '{}' …", ssid);
 
         let ap_config = ApConfig::builder()

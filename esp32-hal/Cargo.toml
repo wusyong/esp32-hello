@@ -8,6 +8,7 @@ bitflags = "1"
 esp-idf-sys = { path = "../esp-idf-sys" }
 embedded-hal = { version = "0.2", features = ["unproven"] }
 static_assertions = "1"
+macaddr = "0.1"
 
 [features]
 default = []

@@ -6,6 +6,8 @@ use core::fmt::Write;
 #[macro_use]
 extern crate alloc;
 
+use macaddr::MacAddr6;
+
 pub mod gpio;
 pub mod ets;
 pub mod uart;
@@ -122,7 +124,7 @@ pub enum MacAddressType {
   Eth,
 }
 
-pub fn mac_address(t: MacAddressType) -> [u8; 6] {
+pub fn mac_address(t: MacAddressType) -> MacAddr6 {
   use esp_idf_sys::{esp_read_mac, esp_mac_type_t};
 
   let t = match t {
@@ -132,7 +134,7 @@ pub fn mac_address(t: MacAddressType) -> [u8; 6] {
     MacAddressType::Eth => esp_idf_sys::esp_mac_type_t::ESP_MAC_ETH,
   };
 
-  let mut mac_address = [0; 6];
+  let mut mac_address = MacAddr6::nil();
   unsafe { esp_read_mac(&mut mac_address as *mut _ as *mut _, t) };
   mac_address
 }
