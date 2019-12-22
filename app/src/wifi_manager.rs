@@ -2,11 +2,12 @@ use std::future::Future;
 use std::io::{self, Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpStream};
 
-use esp32_hal::wifi::*;
+use esp32_hal::{nvs::NameSpace, wifi::*};
 
 pub async fn handle_request(
   mut client: TcpStream, addr: SocketAddr,
   ap_config: &ApConfig,
+  wifi_storage: &mut NameSpace,
   mut ap_running: Option<ApRunning>, mut sta_running: Option<StaRunning>,
 ) -> io::Result<(Option<ApRunning>, Option<StaRunning>)> {
   println!("Handling request from {} …", addr);
@@ -25,7 +26,7 @@ pub async fn handle_request(
         writeln!(client, "HTTP/1.1 200 OK")?;
         writeln!(client, "Content-Type: text/html")?;
         writeln!(client)?;
-        writeln!(client, include_str!("index.html"))?;
+        writeln!(client, "{}", include_str!("index.html"))?;
       },
       Some("/connect") => {
         writeln!(client, "HTTP/1.1 303 See Other")?;
@@ -46,6 +47,9 @@ pub async fn handle_request(
             }
 
             if let (Some(ssid), Some(password)) = (ssid, password) {
+              wifi_storage.set::<&str>("ssid", &ssid).expect("Failed saving SSID");
+              wifi_storage.set::<&str>("password", &password).expect("Failed saving password");
+
               if let Some(wifi) = ap_running.take().map(|w| w.stop()) {
                 let sta_config = StaConfig::builder()
                   .ssid(&ssid)

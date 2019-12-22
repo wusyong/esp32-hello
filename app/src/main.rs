@@ -61,7 +61,7 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
     *rwlock.write().unwrap() = 1;
     println!("rwlock value = {:?}", *rwlock.read().unwrap());
 
-    let mut namespace = nvs.open("wifi").map_err(|e| e.to_string());
+    let mut namespace = nvs.open("wifi")?;
     println!("namespace: {:?}", namespace);
 
     let t = thread::Builder::new()
@@ -92,24 +92,51 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
       .stack_size(8192)
       .spawn(move || block_on(async {
         let mac = mac_address(MacAddressType::Ap);
-        let ssid = format!("ESP {:#}", mac);
-        println!("Starting Access Point '{}' …", ssid);
+        let ap_ssid = format!("ESP {:#}", mac);
 
         let ap_config = ApConfig::builder()
-          .ssid(&ssid)
+          .ssid(&ap_ssid)
           .build();
 
-        let ap = wifi.into_ap(&ap_config);
+        let mut wifi_storage = namespace;
 
-        let mut ap_running = Some(ap.start());
+        let ssid = wifi_storage.get::<String>("ssid").ok();
+        let password = wifi_storage.get::<String>("password").ok();
+
+        let mut ap_running = None;
         let mut sta_running = None;
+
+        if let (Some(ssid), Some(password)) = (ssid, password) {
+          let sta_config = StaConfig::builder()
+            .ssid(&ssid)
+            .password(&password)
+            .build();
+
+            let sta = wifi.into_sta(&sta_config);
+
+            match sta.connect().await {
+              Ok(sta) => {
+                let StaRunning(ip) = sta;
+                println!("Connected to '{}' with IP '{}'.", ssid, Ipv4Addr::from(ip));
+                sta_running = Some(sta);
+              },
+              Err(err) => {
+                let ap = err.wifi().into_ap(&ap_config);
+                ap_running = Some(ap.start());
+              }
+            }
+        } else {
+          println!("Starting Access Point '{}' …", ap_ssid);
+          let ap = wifi.into_ap(&ap_config);
+          ap_running = Some(ap.start());
+        }
 
         let stream = TcpListener::bind("0.0.0.0:80").expect("failed starting TCP listener");
 
         loop {
           match stream.accept() {
             Ok((client, addr)) => {
-              match handle_request(client, addr, &ap_config, ap_running.take(), sta_running.take()).await {
+              match handle_request(client, addr, &ap_config, &mut wifi_storage, ap_running.take(), sta_running.take()).await {
                 Ok((ap, sta)) => {
                   ap_running = ap;
                   sta_running = sta;
@@ -132,14 +159,6 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
       .unwrap();
 
     loop {
-      if let Ok(ref mut namespace) = namespace {
-        println!("GOT VALUE: {:?}", namespace.get::<i32>("forty-two").map_err(|e| e.to_string()));
-        println!("GOT VALUE: {:?}", namespace.get::<String>("hakuna").map_err(|e| e.to_string()));
-
-        println!("Setting value: {:?}", namespace.set::<i32>("forty-two", 42).map_err(|e| e.to_string()));
-        println!("Setting value: {:?}", namespace.set::<&str>("hakuna", "matata").map_err(|e| e.to_string()));
-      }
-
       sleep(Duration::from_secs(5))
     }
   }
