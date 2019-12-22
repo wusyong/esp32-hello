@@ -152,10 +152,10 @@ impl NameSpace {
     T::get(self, &key)
   }
 
- pub fn set<T: SetValue>(&self, key: &str, value: T::Input) -> Result<(), EspError> {
-   let key = cstring!(key);
-   T::set(self, &key, value)
- }
+  pub fn set<T: SetValue>(&mut self, key: &str, value: T::Input) -> Result<(), EspError> {
+    let key = cstring!(key);
+    T::set(self, &key, value)
+  }
 }
 
 impl Drop for NameSpace {

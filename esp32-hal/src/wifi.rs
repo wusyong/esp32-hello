@@ -107,13 +107,12 @@ pub fn wifi_scan(show_hidden: bool, passive: bool, max_ms_per_channel: u32) -> R
     ssid: core::ptr::null_mut(),
     bssid: core::ptr::null_mut(),
     channel: 0,
-    show_hidden: show_hidden,
+    show_hidden,
     scan_type: wifi_scan_type_t::WIFI_SCAN_TYPE_ACTIVE,
     scan_time: wifi_scan_time_t {
       active: wifi_active_scan_time_t { min: 0, max: 0 },
     },
   };
-  config.show_hidden = show_hidden;
 
   if passive {
     config.scan_type = wifi_scan_type_t::WIFI_SCAN_TYPE_PASSIVE;
@@ -155,8 +154,8 @@ impl Wifi {
         channel: config.channel,
         authmode: config.auth_mode.into(),
         ssid_hidden: config.ssid_hidden as u8,
-        max_connection: 4,
-        beacon_interval: 0,
+        max_connection: config.max_connection,
+        beacon_interval: config.beacon_interval,
       },
     };
 
