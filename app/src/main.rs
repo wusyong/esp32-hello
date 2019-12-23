@@ -31,6 +31,8 @@ use wifi_manager::*;
 mod wifi_credentials;
 use wifi_credentials::*;
 
+mod dns;
+
 #[no_mangle]
 pub fn app_main() {
   block_on(async {
@@ -74,6 +76,8 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
 
     println!("Thread spawn result: {:?}", t);
     println!("Thread join result: {:?}", t.map(|t| t.join().unwrap()));
+
+    thread::spawn(dns::server);
 
     thread::Builder::new()
       .name("blink_thread".into())

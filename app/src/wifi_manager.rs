@@ -1,8 +1,24 @@
 use std::future::Future;
 use std::io::{self, Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpStream};
+use std::borrow::Cow;
 
 use esp32_hal::{nvs::NameSpace, wifi::*};
+
+fn ssid_and_password(params: &[u8]) -> (Option<Cow<str>>, Option<Cow<str>>) {
+  let mut ssid = None;
+  let mut password = None;
+
+  for (name, value) in url::form_urlencoded::parse(&params) {
+    match name.as_ref() {
+      "ssid" => ssid = Some(value),
+      "password" => password = Some(value),
+      _ => if ssid.is_some() && password.is_some() { break },
+    }
+  }
+
+  (ssid, password)
+}
 
 pub async fn handle_request(
   mut client: TcpStream, addr: SocketAddr,
@@ -28,25 +44,26 @@ pub async fn handle_request(
         writeln!(client)?;
         writeln!(client, "{}", include_str!("index.html"))?;
       },
+      Some("/hotspot-detect.html") => {
+        writeln!(client, "HTTP/1.1 303 See Other")?;
+        writeln!(client, "Location: http://192.168.4.1/")?;
+        writeln!(client, "Content-Type: text/plain")?;
+        writeln!(client)?;
+        writeln!(client, "Redirecting …")?;
+      },
       Some("/connect") => {
         writeln!(client, "HTTP/1.1 303 See Other")?;
-        writeln!(client, "Location: /")?;
+        writeln!(client, "Location: http://192.168.4.1/")?;
+        writeln!(client, "Content-Type: text/plain")?;
         writeln!(client)?;
+        writeln!(client, "Connecting …")?;
+        drop(client);
 
         match req.method {
           Some("POST") => {
-            let mut ssid = None;
-            let mut password = None;
+            let body = &buf[res..len];
 
-            for (name, value) in url::form_urlencoded::parse(&buf[res..len]) {
-              match name.as_ref() {
-                "ssid" => ssid = Some(value),
-                "password" => password = Some(value),
-                _ => if ssid.is_some() && password.is_some() { break },
-              }
-            }
-
-            if let (Some(ssid), Some(password)) = (ssid, password) {
+            if let (Some(ssid), Some(password)) = ssid_and_password(body) {
               wifi_storage.set::<&str>("ssid", &ssid).expect("Failed saving SSID");
               wifi_storage.set::<&str>("password", &password).expect("Failed saving password");
 
