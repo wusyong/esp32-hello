@@ -6,6 +6,7 @@ use std::fmt;
 use std::str;
 use std::net::{Ipv4Addr, ToSocketAddrs};
 use std::iter::Iterator;
+use std::ops::Range;
 
 const MAX_MESSAGE_SIZE: usize = 512;
 const HEADER_SIZE: usize = size_of::<DnsHeader>();
@@ -13,6 +14,7 @@ const HEADER_SIZE: usize = size_of::<DnsHeader>();
 pub fn respond(header: &mut DnsHeader, response_code: ResponseCode) {
   header.set_type(HeaderType::Response);
   header.set_response_code(response_code);
+  header.set_recursion_available(true);
   header.set_question_count(0);
   header.set_answer_count(0);
   header.set_name_server_count(0);
@@ -64,22 +66,20 @@ pub fn server() {
 
       while let Some(res) = question_iter.next() {
         match res {
-          Ok((s, t, c)) => {
+          Ok((s, t, c, range)) => {
             println!("DOMAIN: {:?}", s);
 
-            if s == "captive.apple.com" {
+            if s == "captive.apple.com" && t == QueryType::A && c == QueryClass::IN {
               header.set_type(HeaderType::Response);
               header.set_response_code(ResponseCode::NoError);
-              header.set_answer_count(header.question_count());
+              header.set_question_count(0);
+              header.set_answer_count(1);
+              header.set_additional_records_count(0);
+              header.set_recursion_available(true);
 
               let mut response = header.as_bytes().to_vec();
 
-              response.extend(rest);
-
-              response.extend(&(0xC000 | size_of::<DnsHeader>() as u16).to_be_bytes());
-
-              response.extend(&t.to_be_bytes());
-              response.extend(&c.to_be_bytes());
+              response.extend(&rest[range]);
 
               let ttl: u32 = 60;
               response.extend(&ttl.to_be_bytes());
@@ -88,7 +88,7 @@ pub fn server() {
               response.extend(&(size_of_val(&gateway_ip) as u16).to_be_bytes());
               response.extend(&gateway_ip.octets());
 
-              println!("send_to: {:?}", socket.send_to(&response, src));
+              println!("send_to success: {:?}", socket.send_to(&response, src));
 
               continue 'outer;
             } else {
@@ -106,7 +106,7 @@ pub fn server() {
       respond(header, ResponseCode::NotImplemented);
     }
 
-    println!("send_to: {:?}", socket.send_to(header.as_bytes(), src));
+    println!("send_to error: {:?}", socket.send_to(header.as_bytes(), src));
   }
 }
 
@@ -118,7 +118,7 @@ pub struct DnsIter<'a> {
 }
 
 impl<'a> Iterator for DnsIter<'a> {
-  type Item = Result<(String, QueryType, QueryClass), ResponseCode>;
+  type Item = Result<(String, QueryType, QueryClass, Range<usize>), ResponseCode>;
 
   fn next(&mut self) -> Option<Self::Item> {
     if self.current_question >= self.question_count {
@@ -149,9 +149,12 @@ impl<'a> Iterator for DnsIter<'a> {
         };
 
         self.current_question += 1;
+
+        let start = self.buf_i;
+
         self.buf_i += i;
 
-        return Some(Ok((domain, query_type, query_class)))
+        return Some(Ok((domain, query_type, query_class, start..(self.buf_i + 5))))
       } else {
         if !domain.is_empty() {
           domain.push('.');
@@ -393,8 +396,24 @@ impl DnsHeader {
     (self.flags[0] & 0b00000001) != 0
   }
 
+  pub fn set_recursion_desired(&mut self, recursion_desired: bool) {
+    if recursion_desired {
+      self.flags[0] |= 0b00000001;
+    } else {
+      self.flags[0] &= 0b11111110;
+    }
+  }
+
   pub fn recursion_available(&self) -> bool {
     (self.flags[1] & 0b10000000) != 0
+  }
+
+  pub fn set_recursion_available(&mut self, recursion_available: bool) {
+    if recursion_available {
+      self.flags[1] |= 0b10000000;
+    } else {
+      self.flags[1] &= 0b01111111;
+    }
   }
 
   pub fn response_code(&self) -> ResponseCode {
