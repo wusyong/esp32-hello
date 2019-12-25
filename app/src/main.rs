@@ -77,7 +77,11 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
     println!("Thread spawn result: {:?}", t);
     println!("Thread join result: {:?}", t.map(|t| t.join().unwrap()));
 
-    thread::spawn(dns::server);
+    thread::Builder::new()
+      .name("dns_thread".into())
+      .stack_size(8192)
+      .spawn(dns::server)
+      .unwrap();
 
     thread::Builder::new()
       .name("blink_thread".into())
