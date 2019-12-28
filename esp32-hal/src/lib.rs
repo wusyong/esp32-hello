@@ -120,7 +120,9 @@ impl core::fmt::Display for EspError {
 pub enum MacAddressType {
   Sta,
   Ap,
+  #[cfg(not(target_device = "esp8266"))]
   Bt,
+  #[cfg(not(target_device = "esp8266"))]
   Eth,
 }
 
@@ -130,7 +132,9 @@ pub fn mac_address(t: MacAddressType) -> MacAddr6 {
   let t = match t {
     MacAddressType::Sta => esp_idf_sys::esp_mac_type_t::ESP_MAC_WIFI_STA,
     MacAddressType::Ap  => esp_idf_sys::esp_mac_type_t::ESP_MAC_WIFI_SOFTAP,
+    #[cfg(not(target_device = "esp8266"))]
     MacAddressType::Bt  => esp_idf_sys::esp_mac_type_t::ESP_MAC_BT,
+    #[cfg(not(target_device = "esp8266"))]
     MacAddressType::Eth => esp_idf_sys::esp_mac_type_t::ESP_MAC_ETH,
   };
 

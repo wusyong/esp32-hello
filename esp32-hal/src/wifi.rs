@@ -18,7 +18,6 @@ use esp_idf_sys::{
   wifi_mode_t,
   wifi_ap_config_t,
   esp_wifi_get_mode,
-  xTaskGetCurrentTaskHandle,
 
   esp_wifi_stop,
   esp_wifi_start,
@@ -32,31 +31,19 @@ use esp_idf_sys::{
   wifi_scan_config_t,
   wifi_sta_config_t,
   wifi_scan_threshold_t,
-  wifi_event_sta_connected_t,
-  wifi_event_sta_disconnected_t,
   wifi_scan_method_t,
   wifi_sort_method_t,
   wifi_auth_mode_t,
-  ip_event_got_ip_t,
-  ip_event_t,
-  IP_EVENT,
-  BaseType_t,
-  vTaskDelete,
   wifi_err_reason_t,
 
   ESP_ERR_WIFI_NOT_INIT,
-  wifi_event_t,
 
   wifi_init_config_t,
   wifi_scan_time_t,
   wifi_active_scan_time_t,
   esp_interface_t,
   wifi_config_t,
-  esp_event_handler_register,
-  esp_event_handler_unregister,
-  WIFI_EVENT,
   esp_wifi_connect,
-  esp_event_base_t,
   esp_wifi_scan_get_ap_num,
   wifi_ap_record_t,
   esp_wifi_scan_get_ap_records,
@@ -214,9 +201,10 @@ impl Wifi {
   }
 }
 
+#[cfg(target_device = "esp32")]
 unsafe extern "C" fn wifi_scan_done_handler(
   event_handler_arg: *mut libc::c_void,
-  event_base: esp_event_base_t,
+  event_base: esp_idf_sys::esp_event_base_t,
   event_id: i32,
   event_data: *mut libc::c_void,
 ) {
@@ -538,7 +526,15 @@ impl core::fmt::Display for WifiError {
 impl core::future::Future for ConnectFuture {
   type Output = Result<StaRunning, WifiError>;
 
+  #[cfg(target_device = "esp8266")]
   fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+    Poll::Pending
+  }
+
+  #[cfg(target_device = "esp32")]
+  fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+    use esp_idf_sys::{esp_event_handler_register, esp_event_handler_unregister, ip_event_t, wifi_event_t, IP_EVENT, WIFI_EVENT};
+
     match &self.state {
       ConnectFutureState::Starting => {
         let b1: Box<(&ConnectFuture, Waker)> = Box::new((&self, cx.waker().clone()));
@@ -582,12 +578,15 @@ impl core::future::Future for ConnectFuture {
   }
 }
 
+#[cfg(target_device = "esp32")]
 unsafe extern "C" fn wifi_sta_handler(
   event_handler_arg: *mut libc::c_void,
-  event_base: esp_event_base_t,
+  event_base: esp_idf_sys::esp_event_base_t,
   event_id: i32,
   event_data: *mut libc::c_void,
 ) {
+  use esp_idf_sys::{ip_event_t, ip_event_got_ip_t, wifi_event_sta_connected_t, wifi_event_sta_disconnected_t, wifi_event_t, IP_EVENT, WIFI_EVENT};
+
   let b = Box::from_raw(event_handler_arg as *mut (&mut ConnectFuture, Waker));
   let (mut f, waker) = *b;
 

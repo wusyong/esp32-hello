@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+chip=esp32
+
 serial_port=
 
 if [ -e /dev/tty.usbserial-1420 ]; then
@@ -14,18 +16,28 @@ fi
 
 set -euo pipefail
 
-cross build --release --target xtensa-esp32-none-elf
+target="xtensa-${chip}-none-elf"
+
+cross build --release --target "${target}" -vv
 
 if [[ -z $serial_port ]]; then
   exit
 fi
 
-esptool.py --chip esp32 --port "${serial_port}" --baud 115200 --before default_reset --after hard_reset write_flash \
+# esptool.py --chip "${chip}" --port "${serial_port}" --baud 115200 --before default_reset --after hard_reset erase_flash
+
+bootloader_offset=0x0000
+
+if [[ "${chip}" = 'esp32' ]]; then
+  bootloader_offset=0x1000
+fi
+
+esptool.py --chip "${chip}" --port "${serial_port}" --baud 115200 --before default_reset --after hard_reset write_flash \
   -z --flash_mode dio \
   --flash_freq 80m \
   --flash_size detect \
-  0x1000 target/esp-build/bootloader/bootloader.bin \
-  0x8000 target/esp-build/partitions.bin \
-  0x10000 target/xtensa-esp32-none-elf/release/esp32-hello.bin
+  "${bootloader_offset}" "target/${target}/esp-build/bootloader/bootloader.bin" \
+  0x8000 "target/${target}/esp-build/partitions.bin" \
+  0x10000 "target/${target}/release/esp32-hello.bin"
 
 python -m serial.tools.miniterm --rts=0 --dtr=0 "${serial_port}" 115200

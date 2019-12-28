@@ -106,7 +106,7 @@ pub fn server() {
 
     // HACK: For some reason, `src` becomes a null-pointer somewhere in
     // `impl ToSocketAddrs for SocketAddr`.
-    // let src = &[src][..];
+    let src = &[src][..];
 
     let response = handle_request(request, &info.ip);
 
