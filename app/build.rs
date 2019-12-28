@@ -2,6 +2,8 @@ use std::{env, error::Error, fs::{remove_file, File}, io::stderr, os::unix::{fs:
 
 fn main() -> Result<(), Box<dyn Error>> {
   println!("cargo:rerun-if-changed=Makefile");
+  println!("cargo:rerun-if-changed=main/app_main.c");
+  println!("cargo:rerun-if-changed=main/component.mk");
   println!("cargo:rerun-if-changed=partitions.csv");
   println!("cargo:rerun-if-changed=sdkconfig");
 

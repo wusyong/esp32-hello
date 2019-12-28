@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-chip=esp32
+chip="${1:-esp32}"
 
 serial_port=
 
