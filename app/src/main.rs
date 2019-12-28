@@ -28,9 +28,6 @@ use esp_idf_sys::*;
 mod wifi_manager;
 use wifi_manager::*;
 
-mod wifi_credentials;
-use wifi_credentials::*;
-
 mod dns;
 
 #[no_mangle]
