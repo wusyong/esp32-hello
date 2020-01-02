@@ -26,6 +26,7 @@ fn main() -> Result<(), Box<dyn Error>> {
   let status = Command::new("make")
     .arg("-j")
     .arg("bootloader")
+    .env("VERBOSE", "1")
     .stdout(Stdio::from(stderr.try_clone()?))
     .stderr(Stdio::from(stderr.try_clone()?))
     .status()?;
@@ -35,6 +36,7 @@ fn main() -> Result<(), Box<dyn Error>> {
   let status = Command::new("make")
     .arg("-j")
     .arg("app")
+    .env("VERBOSE", "1")
     .stdout(Stdio::from(stderr.try_clone()?))
     .stderr(Stdio::from(stderr.try_clone()?))
     .status()?;
