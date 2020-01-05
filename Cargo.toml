@@ -3,7 +3,6 @@ members = [
   "dnsparse",
   "esp-idf-sys",
   "esp32-hal",
-  "alloc-esp32",
   "app",
 ]
 
