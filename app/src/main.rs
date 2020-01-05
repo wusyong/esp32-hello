@@ -97,7 +97,7 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
       .stack_size(8192)
       .spawn(move || block_on(async {
         let mac = mac_address(MacAddressType::Ap);
-        let ap_ssid = format!("ESP {:#}", mac);
+        let ap_ssid = format!("ESP {}", mac);
 
         let ap_config = ApConfig::builder()
           .ssid(&ap_ssid)
