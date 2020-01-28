@@ -13,7 +13,7 @@ use std::io::{Read, Write};
 use std::thread::{self, sleep};
 use std::time::Duration;
 use std::sync::{Mutex, RwLock};
-use std::net::Ipv4Addr;
+use std::net::{Ipv4Addr, SocketAddrV4};
 use std::net::TcpListener;
 
 use embedded_hal::digital::v2::OutputPin;
@@ -136,7 +136,7 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
           ap_running = Some(ap.start());
         }
 
-        let stream = TcpListener::bind("0.0.0.0:80").expect("failed starting TCP listener");
+        let stream = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 80)).expect("failed starting TCP listener");
 
         loop {
           match stream.accept() {
