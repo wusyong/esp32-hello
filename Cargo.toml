@@ -7,12 +7,10 @@ members = [
 ]
 
 [profile.dev]
-debug = false
 panic = "unwind"
 
 [profile.release]
 lto = true
-debug = false
 panic = "unwind"
 
 [patch.crates-io]
