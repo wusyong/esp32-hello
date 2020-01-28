@@ -104,10 +104,6 @@ pub fn server() {
       (frame.assume_init(), src)
     };
 
-    // HACK: For some reason, `src` becomes a null-pointer somewhere in
-    // `impl ToSocketAddrs for SocketAddr`.
-    let src = &[src][..];
-
     let response = handle_request(request, &info.ip);
 
     if let Err(err) = socket.send_to(&response, src) {
