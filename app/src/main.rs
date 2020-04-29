@@ -32,8 +32,6 @@ mod dns;
 
 #[no_mangle]
 pub fn app_main() {
-  // dbg!(std::net::ToSocketAddrs::to_socket_addrs("0.0.0.0:80")).unwrap();
-
   block_on(async {
     if let Err(err) = rust_blink_and_write().await {
       println!("{}", err);
