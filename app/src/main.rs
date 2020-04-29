@@ -39,6 +39,12 @@ pub fn app_main() {
   })
 }
 
+use std::cell::RefCell;
+use std::borrow::BorrowMut;
+thread_local! {
+  pub static FOO: RefCell<u32> = RefCell::new(0);
+}
+
 async fn rust_blink_and_write() -> Result<!, EspError> {
   let mut gpio = GPIO22::into_input_output();
 
@@ -47,6 +53,34 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
     let wifi = Wifi::init(&mut nvs);
 
     println!("AP started.");
+
+    FOO.with(|f| {
+      *f.borrow_mut() += 1;
+    });
+
+    thread::spawn(|| {
+      FOO.with(|f| {
+        *f.borrow_mut() += 1;
+      });
+
+      FOO.with(|f| {
+        println!("THREAD 1: {:?}", f.borrow());
+      })
+    });
+
+    thread::spawn(|| {
+      FOO.with(|f| {
+        *f.borrow_mut() += 1;
+      });
+
+      FOO.with(|f| {
+        println!("THREAD 2: {:?}", f.borrow());
+      })
+    });
+
+    FOO.with(|f| {
+      println!("MAIN THREAD: {:?}", f.borrow());
+    });
 
     // esp32_hal::wifi::wifi_scan(true, false, 1000)?;
 
