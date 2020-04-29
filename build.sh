@@ -4,15 +4,7 @@ set -euo pipefail
 
 chip="${1:-esp32}"
 
-serial_port=
-
-if [ -e /dev/tty.usbserial-1420 ]; then
-  serial_port=/dev/tty.usbserial-1420
-elif [ -e /dev/tty.usbserial-1440 ]; then
-  serial_port=/dev/tty.usbserial-1440
-elif [ -e /dev/cu.SLAB_USBtoUART ]; then
-  serial_port=/dev/cu.SLAB_USBtoUART
-fi
+serial_port="$(ls /dev/tty.usbserial-* 2>/dev/null | head -n 1 || true)"
 
 set -euo pipefail
 
@@ -20,7 +12,7 @@ target="xtensa-${chip}-none-elf"
 
 cross build --release --target "${target}" -vv
 
-if [[ -z $serial_port ]]; then
+if [[ -z "${serial_port}" ]]; then
   exit
 fi
 
