@@ -47,12 +47,12 @@ use esp_idf_sys::{
   esp_wifi_scan_get_ap_num,
   wifi_ap_record_t,
   esp_wifi_scan_get_ap_records,
-  tcpip_adapter_init,
+  esp_netif_init,
+  wifi_pmf_config_t,
 };
 
 pub fn netif_init() -> Result<(), EspError> {
-  unsafe { tcpip_adapter_init() };
-  Ok(())
+  EspError::result(unsafe { esp_netif_init() })
 }
 
 pub fn wifi_init(nvs: &mut NonVolatileStorage) -> Result<(), EspError> {
@@ -180,6 +180,11 @@ impl Wifi {
       }
     };
 
+    let pmf_cfg = wifi_pmf_config_t {
+      capable: false,
+      required: false,
+    };
+
     let mut config = wifi_config_t {
       sta: wifi_sta_config_t {
         ssid: config.ssid,
@@ -191,6 +196,7 @@ impl Wifi {
         listen_interval: config.listen_interval.unwrap_or(0),
         sort_method,
         threshold,
+        pmf_cfg,
       },
     };
 

@@ -1,7 +1,8 @@
 [submodule "esp-idf"]
-	path = esp-idf
-	url = https://github.com/espressif/esp-idf.git
+  path = esp-idf
+  url = https://github.com/espressif/esp-idf.git
+  branch = release/v4.2
 
 [submodule "esp-idf-sys"]
-	path = esp-idf-sys
-	url = https://github.com/reitermarkus/esp-idf-sys.git
+  path = esp-idf-sys
+  url = https://github.com/reitermarkus/esp-idf-sys.git
