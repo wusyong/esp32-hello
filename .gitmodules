@@ -3,6 +3,6 @@
   url = https://github.com/espressif/esp-idf.git
   branch = release/v4.2
 
-[submodule "esp-idf-sys"]
-  path = esp-idf-sys
-  url = https://github.com/reitermarkus/esp-idf-sys.git
+[submodule "esp-idf-bindgen"]
+	path = esp-idf-bindgen
+	url = https://github.com/reitermarkus/esp-idf-bindgen.git

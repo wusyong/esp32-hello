@@ -34,8 +34,12 @@ pub async fn handle_request(
   let mut headers = [httparse::EMPTY_HEADER; 16];
   let mut req = httparse::Request::new(&mut headers);
 
-  if let Ok(httparse::Status::Complete(res)) = req.parse(&buf) {
-    println!("Request: {:?}", req);
+  let status = req.parse(&buf);
+
+  println!("Status: {:?}", status);
+  println!("Request: {:?}", req);
+
+  if let Ok(httparse::Status::Complete(res)) = status {
 
     match req.path {
       Some("/") => {

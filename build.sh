@@ -32,4 +32,4 @@ esptool.py --chip "${chip}" --port "${serial_port}" --baud 115200 --before defau
   0x8000 "target/${target}/esp-build/partitions.bin" \
   0x10000 "target/${target}/release/esp32-hello.bin"
 
-python -m serial.tools.miniterm --rts=0 --dtr=0 "${serial_port}" 115200
+python -m serial.tools.miniterm --raw --exit-char=3 --rts=0 --dtr=0 "${serial_port}" 115200

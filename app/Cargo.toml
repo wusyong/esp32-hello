@@ -5,7 +5,7 @@ edition = "2018"
 
 [dependencies]
 dnsparse = { path = "../dnsparse" }
-esp-idf-sys = { path = "../esp-idf-sys" }
+esp-idf-bindgen = { path = "../esp-idf-bindgen" }
 esp32-hal = { path = "../esp32-hal" }
 embedded-hal = "0.2"
 bitflags = "1"

@@ -8,6 +8,8 @@ extern crate alloc;
 
 use macaddr::MacAddr6;
 
+use esp_idf_bindgen::{esp_err_t, esp_mac_type_t, ESP_OK, esp_err_to_name, esp_read_mac};
+
 pub mod gpio;
 pub mod ets;
 pub mod uart;
@@ -67,15 +69,11 @@ macro_rules! ptr_clear_mask {
   };
 }
 
-use esp_idf_sys::esp_err_t;
-
 #[derive(Clone, Debug)]
 pub struct EspError { code: esp_err_t }
 
 impl EspError {
   pub fn result(code: esp_err_t) -> Result<(), Self> {
-    use esp_idf_sys::ESP_OK;
-
     if code == ESP_OK as esp_err_t {
       return Ok(())
     } else {
@@ -98,8 +96,6 @@ impl From<esp_err_t> for EspError {
 
 impl core::fmt::Display for EspError {
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-    use esp_idf_sys::esp_err_to_name;
-
     unsafe {
       let mut name = esp_err_to_name(self.code);
 
@@ -127,15 +123,13 @@ pub enum MacAddressType {
 }
 
 pub fn mac_address(t: MacAddressType) -> MacAddr6 {
-  use esp_idf_sys::{esp_read_mac, esp_mac_type_t};
-
   let t = match t {
-    MacAddressType::Sta => esp_idf_sys::esp_mac_type_t::ESP_MAC_WIFI_STA,
-    MacAddressType::Ap  => esp_idf_sys::esp_mac_type_t::ESP_MAC_WIFI_SOFTAP,
+    MacAddressType::Sta => esp_mac_type_t::ESP_MAC_WIFI_STA,
+    MacAddressType::Ap  => esp_mac_type_t::ESP_MAC_WIFI_SOFTAP,
     #[cfg(not(target_device = "esp8266"))]
-    MacAddressType::Bt  => esp_idf_sys::esp_mac_type_t::ESP_MAC_BT,
+    MacAddressType::Bt  => esp_mac_type_t::ESP_MAC_BT,
     #[cfg(not(target_device = "esp8266"))]
-    MacAddressType::Eth => esp_idf_sys::esp_mac_type_t::ESP_MAC_ETH,
+    MacAddressType::Eth => esp_mac_type_t::ESP_MAC_ETH,
   };
 
   let mut mac_address = MacAddr6::nil();

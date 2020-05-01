@@ -5,7 +5,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 use alloc::string::String;
 
-use esp_idf_sys::{
+use esp_idf_bindgen::{
   libc,
   esp_err_t,
   ESP_ERR_NVS_NO_FREE_PAGES,
@@ -29,6 +29,7 @@ use esp_idf_sys::{
   nvs_flash_deinit_partition,
   nvs_open_from_partition,
   nvs_close,
+  NVS_DEFAULT_PART_NAME,
 };
 
 use crate::{cstring, EspError};
@@ -180,7 +181,7 @@ impl NonVolatileStorage {
 
   pub fn default() -> Result<Self, EspError> {
     let mut nvs = Self { partition_name: Default::default() };
-    nvs.partition_name[..4].copy_from_slice(b"nvs\0");
+    nvs.partition_name[..4].copy_from_slice(NVS_DEFAULT_PART_NAME);
     Ok(nvs)
   }
 }

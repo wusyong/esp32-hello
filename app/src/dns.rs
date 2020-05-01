@@ -10,7 +10,7 @@ use std::ops::Range;
 use std::ops::Deref;
 use std::ffi::CStr;
 
-use esp_idf_sys::{esp_netif_get_ip_info, esp_netif_get_handle_from_ifkey, esp_netif_ip_info_t};
+use esp_idf_bindgen::{esp_netif_get_ip_info, esp_netif_get_handle_from_ifkey, esp_netif_ip_info_t};
 
 use dnsparse::*;
 

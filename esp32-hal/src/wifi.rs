@@ -10,7 +10,7 @@ use static_assertions::assert_eq_size;
 
 use crate::{EspError, nvs::NonVolatileStorage, hprintln};
 
-use esp_idf_sys::{
+use esp_idf_bindgen::{
   libc,
   ESP_ERR_INVALID_STATE,
   esp_event_loop_create_default,
@@ -210,7 +210,7 @@ impl Wifi {
 #[cfg(target_device = "esp32")]
 unsafe extern "C" fn wifi_scan_done_handler(
   event_handler_arg: *mut libc::c_void,
-  event_base: esp_idf_sys::esp_event_base_t,
+  event_base: esp_idf_bindgen::esp_event_base_t,
   event_id: i32,
   event_data: *mut libc::c_void,
 ) {
@@ -539,7 +539,7 @@ impl core::future::Future for ConnectFuture {
 
   #[cfg(target_device = "esp32")]
   fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-    use esp_idf_sys::{esp_event_handler_register, esp_event_handler_unregister, ip_event_t, wifi_event_t, IP_EVENT, WIFI_EVENT};
+    use esp_idf_bindgen::{esp_event_handler_register, esp_event_handler_unregister, ip_event_t, wifi_event_t, IP_EVENT, WIFI_EVENT};
 
     match &self.state {
       ConnectFutureState::Starting => {
@@ -587,11 +587,11 @@ impl core::future::Future for ConnectFuture {
 #[cfg(target_device = "esp32")]
 unsafe extern "C" fn wifi_sta_handler(
   event_handler_arg: *mut libc::c_void,
-  event_base: esp_idf_sys::esp_event_base_t,
+  event_base: esp_idf_bindgen::esp_event_base_t,
   event_id: i32,
   event_data: *mut libc::c_void,
 ) {
-  use esp_idf_sys::{ip_event_t, ip_event_got_ip_t, wifi_event_sta_connected_t, wifi_event_sta_disconnected_t, wifi_event_t, IP_EVENT, WIFI_EVENT};
+  use esp_idf_bindgen::{ip_event_t, ip_event_got_ip_t, wifi_event_sta_connected_t, wifi_event_sta_disconnected_t, wifi_event_t, IP_EVENT, WIFI_EVENT};
 
   let b = Box::from_raw(event_handler_arg as *mut (&mut ConnectFuture, Waker));
   let (mut f, waker) = *b;

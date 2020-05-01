@@ -23,7 +23,7 @@ use esp32_hal::{*, gpio::*, nvs::*, wifi::*};
 use futures::executor::block_on;
 
 use core::ptr;
-use esp_idf_sys::*;
+use esp_idf_bindgen::*;
 
 mod wifi_manager;
 use wifi_manager::*;
@@ -65,7 +65,7 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
 
       FOO.with(|f| {
         println!("THREAD 1: {:?}", f.borrow());
-      })
+      });
     });
 
     thread::spawn(|| {
@@ -75,7 +75,7 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
 
       FOO.with(|f| {
         println!("THREAD 2: {:?}", f.borrow());
-      })
+      });
     });
 
     FOO.with(|f| {
