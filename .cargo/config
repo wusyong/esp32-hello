@@ -33,6 +33,8 @@ rustflags = [
 
 [target.xtensa-esp32-none-elf]
 rustflags = [
+  "-Z", "link-native-libraries=off",
+
   "-C", "save-temps",
 
   "-C", "linker=xtensa-esp32-elf-gcc",
@@ -84,11 +86,11 @@ rustflags = [
   "-C", "link-arg=-Ltarget/xtensa-esp32-none-elf/esp-build/mbedtls",            "-C", "link-arg=-lmbedtls",
   "-C", "link-arg=-Ltarget/xtensa-esp32-none-elf/esp-build/mdns",               "-C", "link-arg=-lmdns",
   "-C", "link-arg=-Ltarget/xtensa-esp32-none-elf/esp-build/newlib",             "-C", "link-arg=-lnewlib",
+                                                                                "-C", "link-arg=-lc",
+                                                                                "-C", "link-arg=-lm",
                                                                                 "-C", "link-arg=-unewlib_include_locks_impl",
                                                                                 "-C", "link-arg=-unewlib_include_heap_impl",
                                                                                 "-C", "link-arg=-unewlib_include_syscalls_impl",
-  "-C", "link-arg=-Ltarget/esp-idf/components/newlib/lib",                      "-C", "link-arg=-lc",
-                                                                                "-C", "link-arg=-lm",
   "-C", "link-arg=-Ltarget/xtensa-esp32-none-elf/esp-build/nvs_flash",          "-C", "link-arg=-lnvs_flash",
   "-C", "link-arg=-Ltarget/xtensa-esp32-none-elf/esp-build/lwip",               "-C", "link-arg=-llwip",
   "-C", "link-arg=-Ltarget/xtensa-esp32-none-elf/esp-build/pthread",            "-C", "link-arg=-lpthread",
@@ -108,4 +110,5 @@ rustflags = [
   "-C", "link-arg=-lgcov",
   "-C", "link-arg=-Wl,--end-group",
   "-C", "link-arg=-Wl,-EL",
+  "-C", "link-arg=-fno-rtti",
 ]
