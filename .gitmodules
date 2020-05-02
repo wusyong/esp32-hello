@@ -1,7 +1,7 @@
 [submodule "esp-idf"]
   path = esp-idf
   url = https://github.com/espressif/esp-idf.git
-  branch = release/v4.2
+  branch = release/v4.1
 
 [submodule "esp-idf-bindgen"]
 	path = esp-idf-bindgen
