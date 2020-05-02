@@ -10,7 +10,7 @@ set -euo pipefail
 
 target="xtensa-${chip}-none-elf"
 
-profile=
+profile=release
 
 cross build ${profile:+--${profile}} --target "${target}" -vv
 
