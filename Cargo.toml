@@ -12,6 +12,7 @@ panic = "unwind"
 [profile.release]
 lto = true
 panic = "unwind"
+opt-level = "s"
 
 [patch.crates-io]
 libc = { git = "https://github.com/reitermarkus/libc", branch = "xtensa-support" }
