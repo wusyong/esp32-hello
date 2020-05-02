@@ -1,7 +1,9 @@
 [target.xtensa-esp8266-none-elf]
 rustflags = [
+  "-Z", "unstable-options",
   "--cfg", "target_device=\"esp8266\"",
   "-C", "target-cpu=esp8266",
+  "-C", "linker=xtensa-lx106-elf-gcc",
   "-C", "save-temps",
   "-C", "link-arg=-nostdlib",
 
@@ -66,8 +68,6 @@ rustflags = [
   "-C", "link-arg=-Ltarget/xtensa-esp32-none-elf/esp-build/esp_common",         "-C", "link-arg=-lesp_common",
   "-C", "link-arg=-Ltarget/xtensa-esp32-none-elf/esp-build/esp_eth",            "-C", "link-arg=-lesp_eth",
   "-C", "link-arg=-Ltarget/xtensa-esp32-none-elf/esp-build/esp_event",          "-C", "link-arg=-lesp_event",
-  "-C", "link-arg=-Ltarget/xtensa-esp32-none-elf/esp-build/esp_system",         "-C", "link-arg=-lesp_system",
-  "-C", "link-arg=-Ltarget/xtensa-esp32-none-elf/esp-build/esp_timer",          "-C", "link-arg=-lesp_timer",
   "-C", "link-arg=-Ltarget/xtensa-esp32-none-elf/esp-build/esp_netif",          "-C", "link-arg=-lesp_netif",
   "-C", "link-arg=-Ltarget/xtensa-esp32-none-elf/esp-build/esp_ringbuf",        "-C", "link-arg=-lesp_ringbuf",
   "-C", "link-arg=-Ltarget/xtensa-esp32-none-elf/esp-build/esp_wifi",           "-C", "link-arg=-lesp_wifi",

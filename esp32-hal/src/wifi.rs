@@ -98,6 +98,7 @@ pub fn wifi_scan(show_hidden: bool, passive: bool, max_ms_per_channel: u32) -> R
     scan_type: wifi_scan_type_t::WIFI_SCAN_TYPE_ACTIVE,
     scan_time: wifi_scan_time_t {
       active: wifi_active_scan_time_t { min: 0, max: 0 },
+      passive: 0,
     },
   };
 
