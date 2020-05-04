@@ -4,7 +4,7 @@ set -euo pipefail
 
 chip="${1:-esp32}"
 
-serial_port="$(ls /dev/tty.usbserial-* 2>/dev/null | head -n 1 || true)"
+serial_port="$(find /dev -name 'tty.usbserial-*' 2>/dev/null | head -n 1 || true)"
 
 set -euo pipefail
 
