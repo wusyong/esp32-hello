@@ -126,6 +126,10 @@ impl Wifi {
       Err(err) if err.code == ESP_ERR_INVALID_STATE as _ => (),
       err => err.unwrap(),
     }
+
+    unsafe { esp_idf_bindgen::esp_netif_create_default_wifi_ap() };
+    unsafe { esp_idf_bindgen::esp_netif_create_default_wifi_sta() };
+
     wifi_init(nvs).unwrap();
 
     Wifi { mode: PhantomData }

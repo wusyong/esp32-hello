@@ -76,7 +76,7 @@ pub fn server() {
 
   let info: IpInfo = unsafe {
     let mut info = MaybeUninit::<esp_netif_ip_info_t>::uninit();
-    let interface = esp_netif_get_handle_from_ifkey(CStr::from_bytes_with_nul_unchecked(b"WIFI_STA_DEF\0").as_ptr());
+    let interface = esp_netif_get_handle_from_ifkey(CStr::from_bytes_with_nul_unchecked(b"WIFI_AP_DEF\0").as_ptr());
     esp_netif_get_ip_info(interface, info.as_mut_ptr());
     let info = info.assume_init();
     IpInfo {
@@ -85,6 +85,8 @@ pub fn server() {
       gateway: transmute(info.gw),
     }
   };
+
+  println!("IP: {:?}", info);
 
   let mut socket = UdpSocket::bind("0.0.0.0:53").unwrap();
 
