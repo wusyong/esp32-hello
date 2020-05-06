@@ -22,10 +22,20 @@ jobs:
           pushd cross
 
           cargo install --path . --force
+
+          if docker pull '${{ github.actor }}/cross:xtensa-esp32-none-elf'; then
+            docker tag '${{ github.actor }}/cross:xtensa-esp32-none-elf' rustembedded/cross:xtensa-esp32-none-elf
+          fi
+
           ./build-docker-image.sh xtensa-esp32-none-elf
+          docker tag rustembedded/cross:xtensa-esp32-none-elf '${{ github.actor }}/cross:xtensa-esp32-none-elf'
 
           popd
           popd
           rm -rf "${temp_dir}"
+      - name: Log into Docker Hub
+        run: echo '${{ secrets.DOCKER_TOKEN }}' | docker login -u '${{ github.actor }}' --password-stdin
       - name: Build
         run: ./build.sh
+      - name: Push Docker Image
+        run: docker push '${{ github.actor }}/cross:xtensa-esp32-none-elf'
