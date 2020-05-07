@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         with:
-          submodules: true
+          submodules: recursive
       - name: Build Dependencies
         run: |
           temp_dir="$(mktemp -d)"
@@ -29,9 +29,9 @@ jobs:
           popd
           popd
           rm -rf "${temp_dir}"
-      - name: Log into Docker Hub
-        run: echo '${{ secrets.DOCKER_TOKEN }}' | docker login -u '${{ github.actor }}' --password-stdin
       - name: Build
         run: ./build.sh
+      - name: Log into Docker Hub
+        run: echo '${{ secrets.DOCKER_TOKEN }}' | docker login -u '${{ github.actor }}' --password-stdin
       - name: Push Docker Image
         run: docker push '${{ github.actor }}/cross:xtensa-esp32-none-elf'
