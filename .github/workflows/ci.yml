@@ -11,12 +11,25 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Build Dependencies
+      - name: Fetch Cross Repository
+        id: fetch_cross
         run: |
-          temp_dir="$(mktemp -d)"
-          pushd "${temp_dir}"
-          git clone -b xtensa https://github.com/reitermarkus/cross
-          pushd cross
+          pushd "$(mktemp -d)"
+
+          git clone -b xtensa https://github.com/reitermarkus/cross .
+
+          echo "::set-output name=cross_dir::$(pwd)"
+          echo "::set-output name=cross_version::$(git rev-parse HEAD)"
+      - name: Cache Cross
+        uses: actions/cache@v1
+        with:
+          path: ${{ steps.fetch_cross.outputs.cross_dir }}/target
+          key: cross-${{ steps.fetch_cross.outputs.cross_version }}
+      - name: Install Cross & Build Docker Image
+        run: |
+          pushd '${{ steps.fetch_cross.outputs.cross_dir }}'
+
+          cargo install --path . --force
 
           pushd docker
 
@@ -27,18 +40,12 @@ jobs:
             -t '${{ github.actor }}/cross:xtensa-esp32-none-elf' \
             -f Dockerfile.xtensa-esp32-none-elf \
             .
-
-          popd
-
-          cargo install --path . --force
-
-          popd
-          popd
-          rm -rf "${temp_dir}"
-      - uses: actions/checkout@v2
+      - name: Fetch Repository
+        uses: actions/checkout@v2
         with:
           submodules: recursive
-      - id: set_esp_idf_version
+      - name: Set ESP IDF Version
+        id: set_esp_idf_version
         run: echo "::set-output name=esp_idf_version::$(git rev-parse @:esp-idf)"
       - name: Cache ESP IDF Tools
         uses: actions/cache@v1
