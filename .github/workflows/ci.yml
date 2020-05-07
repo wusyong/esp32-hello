@@ -38,6 +38,13 @@ jobs:
       - uses: actions/checkout@v2
         with:
           submodules: recursive
+      - id: set_esp_idf_version
+        run: echo "::set-output name=esp_idf_version::$(git rev-parse @:esp-idf)"
+      - name: Cache ESP IDF Tools
+        uses: actions/cache@v1
+        with:
+          path: target/esp-idf-tools
+          key: esp-idf-tools-${{ steps.set_esp_idf_version.outputs.esp_idf_version }}
       - name: Build
         run: ./build.sh
       - name: Log into Docker Hub
