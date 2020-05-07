@@ -11,9 +11,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-        with:
-          submodules: recursive
       - name: Build Dependencies
         run: |
           temp_dir="$(mktemp -d)"
@@ -21,14 +18,26 @@ jobs:
           git clone -b xtensa https://github.com/reitermarkus/cross
           pushd cross
 
-          cargo install --path . --force
+          pushd docker
 
-          ./build-docker-image.sh xtensa-esp32-none-elf
-          docker tag rustembedded/cross:xtensa-esp32-none-elf '${{ github.actor }}/cross:xtensa-esp32-none-elf'
+          docker pull '${{ github.actor }}/cross:xtensa-esp32-none-elf' || true
+
+          docker build \
+            --cache-from '${{ github.actor }}/cross:xtensa-esp32-none-elf' \
+            -t '${{ github.actor }}/cross:xtensa-esp32-none-elf' \
+            -f Dockerfile.xtensa-esp32-none-elf \
+            .
+
+          popd
+
+          cargo install --path . --force
 
           popd
           popd
           rm -rf "${temp_dir}"
+      - uses: actions/checkout@v2
+        with:
+          submodules: recursive
       - name: Build
         run: ./build.sh
       - name: Log into Docker Hub
