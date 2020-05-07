@@ -226,13 +226,13 @@ unsafe extern "C" fn wifi_scan_done_handler(
 
   use core::mem::MaybeUninit;
 
-  let mut aps: Vec<MaybeUninit<wifi_ap_record_t>> = vec![unsafe { MaybeUninit::uninit().assume_init() }; ap_num as usize];
-  if EspError::result(unsafe { esp_wifi_scan_get_ap_records(&mut ap_num, aps.as_mut_ptr() as *mut wifi_ap_record_t) }).is_ok() {
+  let mut aps: Vec<MaybeUninit<wifi_ap_record_t>> = vec![MaybeUninit::uninit().assume_init(); ap_num as usize];
+  if EspError::result(esp_wifi_scan_get_ap_records(&mut ap_num, aps.as_mut_ptr() as *mut wifi_ap_record_t)).is_ok() {
 
     for i in 0..ap_num {
-      let ap = unsafe { aps[i as usize].assume_init() };
+      let ap = aps[i as usize].assume_init();
 
-      let ssid = ap.ssid.iter().take_while(|&c| *c != 0).map(|&c| unsafe { core::char::from_u32_unchecked(c as u32) }).collect::<String>();
+      let ssid = ap.ssid.iter().take_while(|&c| *c != 0).map(|&c| core::char::from_u32_unchecked(c as u32)).collect::<String>();
       hprintln!("- {}: {}", i, ssid);
     }
   }

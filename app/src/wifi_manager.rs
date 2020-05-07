@@ -1,4 +1,3 @@
-use std::future::Future;
 use std::io::{self, Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpStream};
 use std::borrow::Cow;

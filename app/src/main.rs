@@ -3,13 +3,11 @@
 
 extern crate alloc;
 
-use alloc::string::ToString;
 use alloc::string::String;
 
 #[macro_use]
 extern crate std;
 
-use std::io::{Read, Write};
 use std::thread::{self, sleep};
 use std::time::Duration;
 use std::sync::{Mutex, RwLock};
@@ -21,9 +19,6 @@ use embedded_hal::digital::v2::OutputPin;
 use esp32_hal::{*, gpio::*, nvs::*, wifi::*};
 
 use futures::executor::block_on;
-
-use core::ptr;
-use esp_idf_bindgen::*;
 
 mod wifi_manager;
 use wifi_manager::*;
@@ -40,7 +35,6 @@ pub fn app_main() {
 }
 
 use std::cell::RefCell;
-use std::borrow::BorrowMut;
 thread_local! {
   pub static FOO: RefCell<u32> = RefCell::new(0);
 }
@@ -94,7 +88,7 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
     *rwlock.write().unwrap() = 1;
     println!("rwlock value = {:?}", *rwlock.read().unwrap());
 
-    let mut namespace = nvs.open("wifi")?;
+    let namespace = nvs.open("wifi")?;
     println!("namespace: {:?}", namespace);
 
     let t = thread::Builder::new()

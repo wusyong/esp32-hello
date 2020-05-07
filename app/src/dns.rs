@@ -1,13 +1,9 @@
 use std::thread;
-use std::net::{UdpSocket, SocketAddr, SocketAddrV4};
-use std::mem::{size_of, size_of_val, transmute};
-use std::mem::{self, MaybeUninit};
-use std::fmt;
-use std::str;
-use std::net::{Ipv4Addr, ToSocketAddrs};
+use std::net::UdpSocket;
+use std::mem::{size_of, transmute};
+use std::mem::MaybeUninit;
+use std::net::Ipv4Addr;
 use std::iter::Iterator;
-use std::ops::Range;
-use std::ops::Deref;
 use std::ffi::CStr;
 
 use esp_idf_bindgen::{esp_netif_get_ip_info, esp_netif_get_handle_from_ifkey, esp_netif_ip_info_t};
@@ -88,12 +84,12 @@ pub fn server() {
 
   println!("IP: {:?}", info);
 
-  let mut socket = UdpSocket::bind("0.0.0.0:53").unwrap();
+  let socket = UdpSocket::bind("0.0.0.0:53").unwrap();
 
   'outer: loop {
     thread::yield_now();
 
-    let (mut request, src) = unsafe {
+    let (request, src) = unsafe {
       let mut frame = MaybeUninit::<DnsFrame>::uninit();
 
       let (len, src) = match socket.recv_from((&mut *frame.as_mut_ptr()).as_mut_slice()) {
@@ -105,7 +101,7 @@ pub fn server() {
       };
 
       if len < size_of::<DnsHeader>() {
-        continue
+        continue 'outer
       }
 
       (&mut *frame.as_mut_ptr()).set_len(len);

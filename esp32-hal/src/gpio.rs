@@ -359,7 +359,7 @@ macro_rules! gpio {
       }
 
       #[inline]
-      fn register() -> *mut u32 {
+      pub fn register() -> *mut u32 {
         $addr as *mut u32
       }
     }
