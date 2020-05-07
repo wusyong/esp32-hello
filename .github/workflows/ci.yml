@@ -23,10 +23,6 @@ jobs:
 
           cargo install --path . --force
 
-          if docker pull '${{ github.actor }}/cross:xtensa-esp32-none-elf'; then
-            docker tag '${{ github.actor }}/cross:xtensa-esp32-none-elf' rustembedded/cross:xtensa-esp32-none-elf
-          fi
-
           ./build-docker-image.sh xtensa-esp32-none-elf
           docker tag rustembedded/cross:xtensa-esp32-none-elf '${{ github.actor }}/cross:xtensa-esp32-none-elf'
 
