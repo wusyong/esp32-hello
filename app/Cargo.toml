@@ -9,7 +9,7 @@ esp-idf-bindgen = { path = "../esp-idf-bindgen" }
 esp32-hal = { path = "../esp32-hal" }
 embedded-hal = "0.2"
 bitflags = "1"
-libc = "*"
-httparse = "*"
+libc = "0.2"
+httparse = "1"
 url = "2"
 futures = "0.3"
