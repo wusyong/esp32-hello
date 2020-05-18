@@ -1,12 +1,9 @@
-use core::ptr;
 use core::marker::PhantomData;
 use core::mem::transmute;
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use alloc::string::String;
-
-use static_assertions::assert_eq_size;
 
 use crate::{EspError, nvs::NonVolatileStorage, hprintln};
 
@@ -214,13 +211,13 @@ impl Wifi {
 
 #[cfg(target_device = "esp32")]
 unsafe extern "C" fn wifi_scan_done_handler(
-  event_handler_arg: *mut libc::c_void,
-  event_base: esp_idf_bindgen::esp_event_base_t,
-  event_id: i32,
-  event_data: *mut libc::c_void,
+  _event_handler_arg: *mut libc::c_void,
+  _event_base: esp_idf_bindgen::esp_event_base_t,
+  _event_id: i32,
+  _event_data: *mut libc::c_void,
 ) {
   let mut ap_num = 0;
-  EspError::result(unsafe { esp_wifi_scan_get_ap_num(&mut ap_num) }).unwrap();
+  EspError::result(esp_wifi_scan_get_ap_num(&mut ap_num)).unwrap();
 
   hprintln!("Found {} APs:", ap_num);
 
@@ -508,8 +505,6 @@ pub struct ConnectFuture {
   state: ConnectFutureState,
 }
 
-use alloc::sync::Arc;
-use core::sync::atomic::{AtomicUsize, Ordering};
 use core::task::{Poll, Context, Waker};
 use core::pin::Pin;
 
@@ -538,12 +533,12 @@ impl core::future::Future for ConnectFuture {
   type Output = Result<StaRunning, WifiError>;
 
   #[cfg(target_device = "esp8266")]
-  fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+  fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
     Poll::Pending
   }
 
   #[cfg(target_device = "esp32")]
-  fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+  fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
     use esp_idf_bindgen::{esp_event_handler_register, esp_event_handler_unregister, ip_event_t, wifi_event_t, IP_EVENT, WIFI_EVENT};
 
     match &self.state {
@@ -625,7 +620,6 @@ unsafe extern "C" fn wifi_sta_handler(
 
         hprintln!("EVENT_DATA: {:?}", data);
 
-        let err = EspError::result(data.reason as esp_err_t).unwrap_err();
         f.state = ConnectFutureState::Failed(WifiError::ConnectionError(reason));
         waker.wake();
       },
@@ -638,7 +632,7 @@ unsafe extern "C" fn wifi_sta_handler(
 
     match event_id {
       ip_event_t::IP_EVENT_STA_GOT_IP => {
-        let mut event: ip_event_got_ip_t = *(event_data as *mut ip_event_got_ip_t);
+        let event: ip_event_got_ip_t = *(event_data as *mut ip_event_got_ip_t);
         let octets = u32::from_be(event.ip_info.ip.addr).to_be_bytes();
         f.state = ConnectFutureState::Connected(octets);
         waker.wake();

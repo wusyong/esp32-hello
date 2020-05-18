@@ -83,7 +83,7 @@ impl EspError {
 }
 
 impl From<!> for EspError {
-  fn from(never: !) -> Self {
+  fn from(_: !) -> Self {
     loop {}
   }
 }
@@ -104,7 +104,7 @@ impl core::fmt::Display for EspError {
 
         if c == '\0' { break }
         f.write_char(c)?;
-        name = unsafe { name.add(1) };
+        name = name.add(1);
       }
     }
 

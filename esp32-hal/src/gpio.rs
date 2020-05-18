@@ -168,7 +168,7 @@ unsafe fn gpio_set_direction(gpio_num: usize, mode: GpioMode) {
   if mode.contains(GpioMode::OUTPUT) {
     assert!(gpio_num < 34, "GPIO {} can only be an input.", gpio_num);
 
-    if (gpio_num < 32) {
+    if gpio_num < 32 {
       GPIO.enable_w1ts = 0b1 << gpio_num;
     } else {
       GPIO.enable1_w1ts = (0b1 << (gpio_num - 32)) << 24;
@@ -176,7 +176,7 @@ unsafe fn gpio_set_direction(gpio_num: usize, mode: GpioMode) {
 
     gpio_matrix_out(gpio_num as u32, SIG_GPIO_OUT_IDX, false, false);
   } else {
-    if (gpio_num < 32) {
+    if gpio_num < 32 {
       GPIO.enable_w1tc = 0b1 << gpio_num;
     } else {
       GPIO.enable1_w1tc = (0b1 << (gpio_num - 32)) << 24;
@@ -205,7 +205,7 @@ pub fn gpio_set_level(gpio_num: usize, level: bool) {
 
 fn gpio_set_low(gpio_num: usize) {
   unsafe {
-    if (gpio_num < 32) {
+    if gpio_num < 32 {
       GPIO.out_w1tc = 0b1 << gpio_num;
     } else {
       GPIO.out1_w1tc = (0b1 << (gpio_num - 32)) << 24;
@@ -215,7 +215,7 @@ fn gpio_set_low(gpio_num: usize) {
 
 fn gpio_set_high(gpio_num: usize) {
   unsafe {
-    if (gpio_num < 32) {
+    if gpio_num < 32 {
       GPIO.out_w1ts = 0b1 << gpio_num;
     } else {
       GPIO.out1_w1ts = (0b1 << (gpio_num - 32)) << 24;
@@ -225,7 +225,7 @@ fn gpio_set_high(gpio_num: usize) {
 
 pub fn gpio_get_level(gpio_num: usize) -> bool {
   unsafe {
-    if (gpio_num < 32) {
+    if gpio_num < 32 {
       (GPIO.r#in >> gpio_num) & 0b1 == 1
     } else {
       ((GPIO.in1 >> 24) >> (gpio_num - 32)) & 0b1 == 1
