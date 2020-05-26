@@ -15,4 +15,4 @@ panic = "unwind"
 opt-level = "s"
 
 [patch.crates-io]
-libc = { git = "https://github.com/reitermarkus/libc", branch = "xtensa-support-master" }
+libc = { git = "https://github.com/rust-lang/libc" }
