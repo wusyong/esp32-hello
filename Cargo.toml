@@ -13,6 +13,3 @@ panic = "unwind"
 lto = true
 panic = "unwind"
 opt-level = "s"
-
-[patch.crates-io]
-libc = { git = "https://github.com/rust-lang/libc" }

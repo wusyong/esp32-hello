@@ -1,5 +1,2 @@
 [dependencies]
 std = {}
-
-[patch.crates-io]
-libc = { git = "https://github.com/rust-lang/libc" }
