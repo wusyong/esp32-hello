@@ -13,6 +13,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Set up Toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          # Remove when https://github.com/rust-lang/cargo/issues/8351 is closed.
+          toolchain: nightly-2020-06-11
       - name: Fetch Cross Repository
         id: fetch_cross
         run: |
