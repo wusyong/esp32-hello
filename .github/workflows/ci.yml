@@ -44,6 +44,9 @@ jobs:
 
           docker build \
             --cache-from '${{ github.actor }}/cross:xtensa-esp32-none-elf' \
+            --build-arg LLVM_XTENSA_REPO='https://github.com/espressif/llvm-project' \
+            --build-arg LLVM_XTENSA_BRANCH='xtensa_release_9.0.1' \
+            --build-arg LLVM_XTENSA_COMMIT='9c41e3e763300c05ddb593ed6e49999ee290aa2f' \
             -t '${{ github.actor }}/cross:xtensa-esp32-none-elf' \
             -f Dockerfile.xtensa-esp32-none-elf \
             .
