@@ -14,6 +14,14 @@
 
 # Building
 
+When building the first time, fetch the submodules using
+
+```
+git submodule update --init --recursive
+```
+
+Afterwards, you can build the project using
+
 ```
 ./build.sh
 ```
