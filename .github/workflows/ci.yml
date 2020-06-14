@@ -43,8 +43,6 @@ jobs:
 
           docker build \
             --cache-from '${{ github.actor }}/cross:xtensa-esp32-none-elf' \
-            --build-arg LLVM_XTENSA_BRANCH='xtensa_release_9.0.1_with_rust_patches-31-05-2020-cherry-pick' \
-            --build-arg RUST_XTENSA_COMMIT='f6ea066d4937207b9183eb71e864ac9ea2b4051a' \
             -t '${{ github.actor }}/cross:xtensa-esp32-none-elf' \
             -f Dockerfile.xtensa-esp32-none-elf \
             .
