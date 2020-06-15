@@ -10,6 +10,5 @@ members = [
 panic = "unwind"
 
 [profile.release]
-lto = true
 panic = "unwind"
 opt-level = "s"
