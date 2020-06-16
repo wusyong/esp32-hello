@@ -1,3 +1,5 @@
 [dependencies]
 std = {}
-compiler_builtins = { features = ["mangled-names"] }
+
+[patch.crates-io]
+compiler_builtins = { git = "https://github.com/reitermarkus/compiler-builtins", branch = "xtensa-support" }
