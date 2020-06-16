@@ -327,13 +327,13 @@ pub struct StaConfig {
   threshold: Option<ScanThreshold>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct ScanThreshold {
   rssi: i8,
   auth_mode: AuthMode,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum AuthMode {
   Open,
   Wpa2Psk,
@@ -348,7 +348,7 @@ impl From<AuthMode> for wifi_auth_mode_t {
   }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum ScanMethod {
   Fast,
   Full,
@@ -360,7 +360,7 @@ impl Default for ScanMethod {
   }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum SortMethod {
   BySignal,
 }
@@ -508,7 +508,7 @@ pub struct ConnectFuture {
 use core::task::{Poll, Context, Waker};
 use core::pin::Pin;
 
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone)]
 pub enum WifiError {
   Internal(EspError),
   ConnectionError(wifi_err_reason_t),
