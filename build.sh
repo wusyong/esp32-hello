@@ -22,7 +22,7 @@ export IDF_TOOLS_PATH
 
 mkdir -p "${IDF_TOOLS_PATH}"
 
-cross build ${profile:+--${profile}} --target "${target}" -vv
+cross build ${profile:+--${profile}} --target "${target}" --package app -vv
 
 cross doc ${profile:+--${profile}} --target "${target}" --no-deps
 
@@ -44,6 +44,6 @@ time esptool.py --chip "${chip}" --port "${serial_port}" --baud "${FLASH_BAUDRAT
   --flash_size detect \
   "${bootloader_offset}" "target/${target}/esp-build/bootloader/bootloader.bin" \
   0x8000 "target/${target}/esp-build/partitions.bin" \
-  0x10000 "target/${target}/${profile:-debug}/esp32-hello.bin"
+  0x10000 "target/${target}/${profile:-debug}/app.bin"
 
 python -m serial.tools.miniterm --raw --exit-char=3 --rts=0 --dtr=0 "${serial_port}" "${MONITOR_BAUDRATE}"
