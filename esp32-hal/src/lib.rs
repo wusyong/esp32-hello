@@ -1,12 +1,14 @@
 #![feature(never_type)]
+#![warn(missing_debug_implementations)]
 #![no_std]
 
 use core::fmt::Write;
+use core::mem::MaybeUninit;
 
 #[macro_use]
 extern crate alloc;
 
-use macaddr::MacAddr6;
+use macaddr::{MacAddr, MacAddr6};
 
 use esp_idf_bindgen::{esp_err_t, esp_mac_type_t, ESP_OK, esp_err_to_name, esp_read_mac};
 
@@ -112,27 +114,55 @@ impl core::fmt::Display for EspError {
   }
 }
 
-#[repr(C)]
-pub enum MacAddressType {
+#[derive(Debug, Clone, Copy)]
+pub enum MacAddrType {
+  /// Mac address type of the WiFi interface in station mode.
   Sta,
+  /// Mac address type of the WiFi interface in access point mode.
   Ap,
   #[cfg(not(target_device = "esp8266"))]
+  /// Mac address type of the Bluetooth interface.
   Bt,
+  /// Mac address type of the Ethernet interface.
   #[cfg(not(target_device = "esp8266"))]
   Eth,
 }
 
-pub fn mac_address(t: MacAddressType) -> MacAddr6 {
-  let t = match t {
-    MacAddressType::Sta => esp_mac_type_t::ESP_MAC_WIFI_STA,
-    MacAddressType::Ap  => esp_mac_type_t::ESP_MAC_WIFI_SOFTAP,
-    #[cfg(not(target_device = "esp8266"))]
-    MacAddressType::Bt  => esp_mac_type_t::ESP_MAC_BT,
-    #[cfg(not(target_device = "esp8266"))]
-    MacAddressType::Eth => esp_mac_type_t::ESP_MAC_ETH,
-  };
+/// ```no_run
+/// use macaddr::MacAddr6;
+/// use esp32_hal::MacAddrType;
+///
+/// MacAddr6::from(MacAddrType::Ap)
+/// ```
+impl From<MacAddrType> for MacAddr6 {
+  fn from(mac_address_type: MacAddrType) -> Self {
+    let mac_address_type = match mac_address_type {
+      MacAddrType::Sta => esp_mac_type_t::ESP_MAC_WIFI_STA,
+      MacAddrType::Ap  => esp_mac_type_t::ESP_MAC_WIFI_SOFTAP,
+      #[cfg(not(target_device = "esp8266"))]
+      MacAddrType::Bt  => esp_mac_type_t::ESP_MAC_BT,
+      #[cfg(not(target_device = "esp8266"))]
+      MacAddrType::Eth => esp_mac_type_t::ESP_MAC_ETH,
+    };
 
-  let mut mac_address = MacAddr6::nil();
-  unsafe { esp_read_mac(&mut mac_address as *mut _ as *mut _, t) };
-  mac_address
+    let mut mac_address = MaybeUninit::<Self>::uninit();
+    unsafe {
+      let err = esp_read_mac(mac_address.as_mut_ptr() as *mut _, mac_address_type);
+      debug_assert_eq!(err, ESP_OK as _);
+      mac_address.assume_init()
+    }
+  }
+}
+
+
+/// ```no_run
+/// use macaddr::MacAddr;
+/// use esp32_hal::MacAddrType;
+///
+/// MacAddr::from(MacAddrType::Ap)
+/// ```
+impl From<MacAddrType> for MacAddr {
+  fn from(mac_address_type: MacAddrType) -> Self {
+    Self::V6(mac_address_type.into())
+  }
 }

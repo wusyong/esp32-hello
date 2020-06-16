@@ -15,6 +15,7 @@ use std::net::{Ipv4Addr, SocketAddrV4};
 use std::net::TcpListener;
 
 use embedded_hal::digital::v2::OutputPin;
+use macaddr::MacAddr;
 
 use esp32_hal::{*, gpio::*, nvs::*, wifi::*};
 
@@ -124,7 +125,7 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
       .name("server_thread".into())
       .stack_size(8192)
       .spawn(move || block_on(async {
-        let mac = mac_address(MacAddressType::Ap);
+        let mac = MacAddr::from(MacAddrType::Ap);
         let ap_ssid = format!("ESP {}", mac);
 
         let ap_config = ApConfig::builder()
