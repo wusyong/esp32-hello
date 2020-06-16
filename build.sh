@@ -7,12 +7,9 @@ cd "$(dirname "${0}")"
 FLASH_BAUDRATE=460800
 MONITOR_BAUDRATE=115200
 
-chip="${1:-esp32}"
-
 serial_port="$(find /dev -name 'tty.usbserial-*' 2>/dev/null | head -n 1 || true)"
 
-set -euo pipefail
-
+chip="${1:-esp32}"
 target="xtensa-${chip}-none-elf"
 
 profile=release
@@ -26,6 +23,8 @@ export IDF_TOOLS_PATH
 mkdir -p "${IDF_TOOLS_PATH}"
 
 cross build ${profile:+--${profile}} --target "${target}" -vv
+
+cross doc ${profile:+--${profile}} --target "${target}" --no-deps
 
 if [[ -z "${serial_port}" ]]; then
   exit
