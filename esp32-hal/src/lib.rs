@@ -54,7 +54,6 @@ macro_rules! cstring {
   }}
 }
 
-
 #[macro_export]
 macro_rules! ptr_set_mask {
   ($register:expr, $mask:expr) => {
@@ -153,7 +152,6 @@ impl From<MacAddrType> for MacAddr6 {
     }
   }
 }
-
 
 /// ```no_run
 /// use macaddr::MacAddr;
