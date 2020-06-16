@@ -2,7 +2,7 @@
 members = [
   "dnsparse",
   "esp-idf-bindgen",
-  "esp32-hal",
+  "esp-idf-hal",
   "app",
 ]
 

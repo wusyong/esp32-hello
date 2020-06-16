@@ -2,7 +2,7 @@ use std::io::{self, Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpStream};
 use std::borrow::Cow;
 
-use esp32_hal::{nvs::NameSpace, wifi::*};
+use esp_idf_hal::{nvs::NameSpace, wifi::*};
 
 fn ssid_and_password(params: &[u8]) -> (Option<Cow<str>>, Option<Cow<str>>) {
   let mut ssid = None;

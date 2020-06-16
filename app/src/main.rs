@@ -17,7 +17,7 @@ use std::net::TcpListener;
 use embedded_hal::digital::v2::OutputPin;
 use macaddr::MacAddr;
 
-use esp32_hal::{*, gpio::*, nvs::*, wifi::*};
+use esp_idf_hal::{*, gpio::*, nvs::*, wifi::*};
 
 use futures::executor::block_on;
 
