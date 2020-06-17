@@ -17,7 +17,7 @@ use std::net::TcpListener;
 use embedded_hal::digital::v2::OutputPin;
 use macaddr::MacAddr;
 
-use esp_idf_hal::{*, gpio::*, nvs::*, wifi::*};
+use esp_idf_hal::{*, nvs::*, wifi::*};
 
 use futures::executor::block_on;
 
@@ -41,7 +41,12 @@ thread_local! {
 }
 
 async fn rust_blink_and_write() -> Result<!, EspError> {
-  let mut gpio = GPIO22::into_input_output();
+    use esp32_hal::{target, gpio::GpioExt};
+
+    let dp = unsafe { target::Peripherals::steal() };
+    let pins = dp.GPIO.split();
+
+    let mut gpio = pins.gpio22.into_open_drain_output();
 
     let mut nvs = NonVolatileStorage::default()?;
 

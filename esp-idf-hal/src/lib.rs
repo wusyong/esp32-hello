@@ -12,9 +12,7 @@ use macaddr::{MacAddr, MacAddr6};
 
 use esp_idf_bindgen::{esp_err_t, esp_mac_type_t, ESP_OK, esp_err_to_name, esp_read_mac};
 
-pub mod gpio;
 pub mod ets;
-pub mod uart;
 pub mod netif;
 pub mod wifi;
 pub mod nvs;

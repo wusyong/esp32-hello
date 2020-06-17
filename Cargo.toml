@@ -13,3 +13,6 @@ panic = "unwind"
 lto = true
 panic = "unwind"
 opt-level = "s"
+
+[patch.crates-io]
+esp32-hal = { git = "https://github.com/esp-rs/esp32-hal" }
