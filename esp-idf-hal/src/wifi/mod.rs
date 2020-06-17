@@ -243,7 +243,6 @@ pub fn netif_init() -> Result<(), EspError> {
 }
 
 pub fn wifi_init(nvs: &mut NonVolatileStorage) -> Result<(), EspError> {
-  nvs.flash_init()?;
   let config = wifi_init_config_t::default();
   EspError::result(unsafe { esp_wifi_init(&config) })
 }

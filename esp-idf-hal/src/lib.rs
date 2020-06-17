@@ -45,15 +45,6 @@ macro_rules! hprintln {
 }
 
 #[macro_export]
-macro_rules! cstring {
-  ($s:expr) => {{
-    let mut name: Vec<libc::c_char> = $s.chars().map(|c| c as libc::c_char).collect();
-    name.push(0);
-    name
-  }}
-}
-
-#[macro_export]
 macro_rules! ptr_set_mask {
   ($register:expr, $mask:expr) => {
     let ptr = $register as *mut u32;

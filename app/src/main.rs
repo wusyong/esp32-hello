@@ -48,7 +48,7 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
 
     let mut gpio = pins.gpio22.into_open_drain_output();
 
-    let mut nvs = NonVolatileStorage::default()?;
+    let mut nvs = NonVolatileStorage::default();
 
     let wifi = Wifi::init(&mut nvs)?;
 
@@ -179,8 +179,7 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
                   wifi_running = wr;
                 },
                 Err(err) => {
-                  eprintln!("Failed to handle request: {:?}", err);
-                  break;
+                  panic!("Failed to handle request: {:?}", err);
                 },
               }
             },
