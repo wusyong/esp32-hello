@@ -45,7 +45,7 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
 
     let mut nvs = NonVolatileStorage::default()?;
 
-    let wifi = Wifi::init(&mut nvs);
+    let wifi = Wifi::init(&mut nvs)?;
 
     println!("AP started.");
 
@@ -126,42 +126,43 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
       .stack_size(8192)
       .spawn(move || block_on(async {
         let mac = MacAddr::from(MacAddrType::Ap);
-        let ap_ssid = format!("ESP {}", mac);
+
+        let ap_ssid = Ssid::from_bytes(format!("ESP {}", mac).as_bytes()).unwrap();
 
         let ap_config = ApConfig::builder()
-          .ssid(&ap_ssid)
+          .ssid(ap_ssid)
           .build();
 
         let mut wifi_storage = namespace;
 
-        let ssid = wifi_storage.get::<String>("ssid").ok();
-        let password = wifi_storage.get::<String>("password").ok();
+        let ssid = wifi_storage.get::<String>("ssid").ok().and_then(|s| Ssid::from_bytes(s.as_bytes()).ok());
+        let password = wifi_storage.get::<String>("password").ok().and_then(|s| Password::from_bytes(s.as_bytes()).ok());
 
         let mut ap_running = None;
         let mut sta_running = None;
 
         if let (Some(ssid), Some(password)) = (ssid, password) {
           let sta_config = StaConfig::builder()
-            .ssid(&ssid)
-            .password(&password)
+            .ssid(ssid)
+            .password(password)
             .build();
 
-            let sta = wifi.into_sta(&sta_config);
+            let sta = wifi.into_sta(&sta_config).unwrap();
 
             match sta.connect().await {
               Ok(sta) => {
                 let StaRunning(ip) = sta;
-                println!("Connected to '{}' with IP '{}'.", ssid, Ipv4Addr::from(ip));
+                println!("Connected to '{}' with IP '{}'.", sta_config.ssid(), Ipv4Addr::from(ip));
                 sta_running = Some(sta);
               },
               Err(err) => {
-                let ap = err.wifi().into_ap(&ap_config);
+                let ap = err.wifi().into_ap(&ap_config).unwrap();
                 ap_running = Some(ap.start());
               }
             }
         } else {
-          println!("Starting Access Point '{}' …", ap_ssid);
-          let ap = wifi.into_ap(&ap_config);
+          println!("Starting Access Point '{}' …", ap_config.ssid());
+          let ap = wifi.into_ap(&ap_config).unwrap();
           ap_running = Some(ap.start());
         }
 
