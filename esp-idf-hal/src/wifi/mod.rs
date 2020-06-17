@@ -15,46 +15,7 @@ use macaddr::MacAddr6;
 
 use crate::{EspError, nvs::NonVolatileStorage, netif::IpInfo, hprintln};
 
-use esp_idf_bindgen::{
-  libc,
-  ESP_ERR_INVALID_STATE,
-  esp_event_loop_create_default,
-  esp_err_t,
-  wifi_mode_t,
-  wifi_ap_config_t,
-  esp_wifi_get_mode,
-
-  esp_wifi_stop,
-  esp_wifi_start,
-
-  esp_wifi_init,
-  esp_wifi_scan_start,
-  esp_wifi_set_mode,
-  esp_wifi_set_config,
-
-  wifi_scan_type_t,
-  wifi_scan_config_t,
-  wifi_sta_config_t,
-  wifi_scan_threshold_t,
-  wifi_scan_method_t,
-  wifi_sort_method_t,
-  wifi_auth_mode_t,
-  wifi_err_reason_t,
-
-  ESP_ERR_WIFI_NOT_INIT,
-
-  wifi_init_config_t,
-  wifi_scan_time_t,
-  wifi_active_scan_time_t,
-  esp_interface_t,
-  wifi_config_t,
-  esp_wifi_connect,
-  esp_wifi_scan_get_ap_num,
-  wifi_ap_record_t,
-  esp_wifi_scan_get_ap_records,
-  esp_netif_init,
-  wifi_pmf_config_t,
-};
+use esp_idf_bindgen::*;
 
 mod sta_config;
 pub use sta_config::*;
@@ -238,43 +199,6 @@ impl From<AuthMode> for wifi_auth_mode_t {
   }
 }
 
-pub fn netif_init() -> Result<(), EspError> {
-  EspError::result(unsafe { esp_netif_init() })
-}
-
-pub fn wifi_init(nvs: &mut NonVolatileStorage) -> Result<(), EspError> {
-  let config = wifi_init_config_t::default();
-  EspError::result(unsafe { esp_wifi_init(&config) })
-}
-
-pub fn wifi_start() -> Result<(), EspError> {
-  EspError::result(unsafe { esp_wifi_start() })
-}
-
-pub fn wifi_stop() -> Result<(), EspError> {
-  EspError::result(unsafe { esp_wifi_stop() })
-}
-
-pub fn get_mode() -> Result<wifi_mode_t, EspError> {
-  let mut mode = wifi_mode_t::WIFI_MODE_NULL;
-
-  match EspError::result(unsafe { esp_wifi_get_mode(&mut mode) }) {
-    Ok(()) => Ok(mode),
-    Err(err) if err.code == ESP_ERR_WIFI_NOT_INIT as esp_err_t => {
-      Ok(wifi_mode_t::WIFI_MODE_NULL)
-    },
-    Err(err) => Err(err)
-  }
-}
-
-pub fn set_mode(mode: wifi_mode_t) -> Result<(), EspError> {
-  EspError::result(unsafe { esp_wifi_set_mode(mode) })
-}
-
-pub fn set_config(interface: esp_interface_t, config: &mut wifi_config_t) -> Result<(), EspError> {
-  EspError::result(unsafe { esp_wifi_set_config(interface, config) })
-}
-
 pub fn wifi_scan(show_hidden: bool, passive: bool, max_ms_per_channel: u32) -> Result<(), EspError> {
   let mut config = wifi_scan_config_t {
     ssid: core::ptr::null_mut(),
@@ -305,34 +229,30 @@ pub struct Wifi<T = ()> {
 
 impl Wifi {
   pub fn init(nvs: &mut NonVolatileStorage) -> Result<Wifi<()>, EspError> {
-    netif_init()?;
+    EspError::result(unsafe { esp_netif_init() })?;
 
     EspError::result(unsafe { esp_event_loop_create_default() })?;
 
-    unsafe { esp_idf_bindgen::esp_netif_create_default_wifi_ap() };
-    unsafe { esp_idf_bindgen::esp_netif_create_default_wifi_sta() };
+    unsafe { esp_netif_create_default_wifi_ap() };
+    unsafe { esp_netif_create_default_wifi_sta() };
 
-    wifi_init(nvs)?;
+    let config = wifi_init_config_t::default();
+    EspError::result(unsafe { esp_wifi_init(&config) })?;
 
     Ok(Wifi { mode: PhantomData })
   }
 
   pub fn into_ap(self, config: &ApConfig) -> Result<Wifi<ApConfig>, EspError> {
-
     let mut config = wifi_config_t::from(config);
-
-    set_mode(wifi_mode_t::WIFI_MODE_AP)?;
-    set_config(esp_interface_t::ESP_IF_WIFI_AP, &mut config)?;
-
+    EspError::result(unsafe { esp_wifi_set_mode(wifi_mode_t::WIFI_MODE_AP) })?;
+    EspError::result(unsafe { esp_wifi_set_config(esp_interface_t::ESP_IF_WIFI_AP, &mut config) })?;
     Ok(Wifi { mode: PhantomData })
   }
 
   pub fn into_sta(self, config: &StaConfig) -> Result<Wifi<StaConfig>, EspError> {
     let mut config = wifi_config_t::from(config);
-
-    set_mode(wifi_mode_t::WIFI_MODE_STA)?;
-    set_config(esp_interface_t::ESP_IF_WIFI_STA, &mut config)?;
-
+    EspError::result(unsafe { esp_wifi_set_mode(wifi_mode_t::WIFI_MODE_STA) })?;
+    EspError::result(unsafe { esp_wifi_set_config(esp_interface_t::ESP_IF_WIFI_STA, &mut config) })?;
     Ok(Wifi { mode: PhantomData })
   }
 }
@@ -340,7 +260,7 @@ impl Wifi {
 #[cfg(target_device = "esp32")]
 unsafe extern "C" fn wifi_scan_done_handler(
   _event_handler_arg: *mut libc::c_void,
-  _event_base: esp_idf_bindgen::esp_event_base_t,
+  _event_base: esp_event_base_t,
   _event_id: i32,
   _event_data: *mut libc::c_void,
 ) {
@@ -393,13 +313,13 @@ impl WifiRunning {
 
 impl Drop for WifiRunning {
   fn drop(&mut self) {
-    let _ = wifi_stop();
+    let _ = EspError::result(unsafe { esp_wifi_stop() });
   }
 }
 
 impl Wifi<ApConfig> {
   pub fn start(self) -> WifiRunning {
-    wifi_start().unwrap();
+    EspError::result(unsafe { esp_wifi_start() }).unwrap();
     WifiRunning::Ap
   }
 }
@@ -463,41 +383,53 @@ impl core::future::Future for ConnectFuture {
 
   #[cfg(target_device = "esp32")]
   fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-    use esp_idf_bindgen::{esp_event_handler_register, esp_event_handler_unregister, ip_event_t, wifi_event_t, IP_EVENT, WIFI_EVENT};
+    fn register_sta_handlers(b: *mut (Pin<&mut ConnectFuture>, &Waker)) -> Result<(), EspError> {
+      EspError::result(unsafe {
+        esp_event_handler_register(WIFI_EVENT, wifi_event_t::WIFI_EVENT_STA_START as _, Some(wifi_sta_handler), b as *mut _)
+      })?;
+      EspError::result(unsafe {
+        esp_event_handler_register(WIFI_EVENT, wifi_event_t::WIFI_EVENT_STA_CONNECTED as _, Some(wifi_sta_handler), b as *mut _)
+      })?;
+      EspError::result(unsafe {
+        esp_event_handler_register(WIFI_EVENT, wifi_event_t::WIFI_EVENT_STA_DISCONNECTED as _, Some(wifi_sta_handler), b as *mut _)
+      })?;
+      EspError::result(unsafe {
+        esp_event_handler_register(IP_EVENT, ip_event_t::IP_EVENT_STA_GOT_IP as _, Some(wifi_sta_handler), b as *mut _)
+      })?;
+      Ok(())
+    }
+
+    fn unregister_sta_handlers() {
+      unsafe { esp_event_handler_unregister(WIFI_EVENT, wifi_event_t::WIFI_EVENT_STA_START as _, Some(wifi_sta_handler)) };
+      unsafe { esp_event_handler_unregister(WIFI_EVENT, wifi_event_t::WIFI_EVENT_STA_CONNECTED as _, Some(wifi_sta_handler)) };
+      unsafe { esp_event_handler_unregister(WIFI_EVENT, wifi_event_t::WIFI_EVENT_STA_DISCONNECTED as _, Some(wifi_sta_handler)) };
+      unsafe { esp_event_handler_unregister(IP_EVENT, ip_event_t::IP_EVENT_STA_GOT_IP as _, Some(wifi_sta_handler)) };
+    }
 
     match &self.state {
       ConnectFutureState::Starting => {
         let b: Box<(Pin<&mut ConnectFuture>, &Waker)> = Box::new((self.as_mut(), cx.waker()));
         let b = Box::into_raw(b);
 
-        EspError::result(unsafe {
-          esp_event_handler_register(WIFI_EVENT, wifi_event_t::WIFI_EVENT_STA_START as _, Some(wifi_sta_handler), b as *mut _)
-        })?;
-        EspError::result(unsafe {
-          esp_event_handler_register(WIFI_EVENT, wifi_event_t::WIFI_EVENT_STA_CONNECTED as _, Some(wifi_sta_handler), b as *mut _)
-        })?;
-        EspError::result(unsafe {
-          esp_event_handler_register(WIFI_EVENT, wifi_event_t::WIFI_EVENT_STA_DISCONNECTED as _, Some(wifi_sta_handler), b as *mut _)
-        })?;
-        EspError::result(unsafe {
-          esp_event_handler_register(IP_EVENT, ip_event_t::IP_EVENT_STA_GOT_IP as _, Some(wifi_sta_handler), b as *mut _)
-        })?;
-        wifi_start()?;
+        if let Err(err) = register_sta_handlers(b) {
+          unregister_sta_handlers();
+          drop(unsafe { Box::from_raw(b) });
+          return Poll::Ready(Err(err.into()));
+        }
+
+        EspError::result(unsafe { esp_wifi_start() })?;
         Poll::Pending
       },
       ConnectFutureState::ConnectedWithoutIp { .. } => {
         Poll::Pending
       }
       state => {
-        EspError::result(unsafe { esp_event_handler_unregister(WIFI_EVENT, wifi_event_t::WIFI_EVENT_STA_START as _, Some(wifi_sta_handler)) })?;
-        EspError::result(unsafe { esp_event_handler_unregister(WIFI_EVENT, wifi_event_t::WIFI_EVENT_STA_CONNECTED as _, Some(wifi_sta_handler)) })?;
-        EspError::result(unsafe { esp_event_handler_unregister(WIFI_EVENT, wifi_event_t::WIFI_EVENT_STA_DISCONNECTED as _, Some(wifi_sta_handler)) })?;
-        EspError::result(unsafe { esp_event_handler_unregister(IP_EVENT, ip_event_t::IP_EVENT_STA_GOT_IP as _, Some(wifi_sta_handler)) })?;
+        unregister_sta_handlers();
 
         match *state {
           ConnectFutureState::Starting | ConnectFutureState::ConnectedWithoutIp { .. } => unreachable!(),
           ConnectFutureState::Failed(ref err) => {
-            let _ = wifi_stop();
+            let _ = EspError::result(unsafe { esp_wifi_stop() });
             Poll::Ready(Err(err.clone().into()))
           },
           ConnectFutureState::Connected { ref ip_info, .. } => {
@@ -512,12 +444,10 @@ impl core::future::Future for ConnectFuture {
 #[cfg(target_device = "esp32")]
 extern "C" fn wifi_sta_handler(
   event_handler_arg: *mut libc::c_void,
-  event_base: esp_idf_bindgen::esp_event_base_t,
+  event_base: esp_event_base_t,
   event_id: i32,
   event_data: *mut libc::c_void,
 ) {
-  use esp_idf_bindgen::{ip_event_t, ip_event_got_ip_t, wifi_event_sta_connected_t, wifi_event_sta_disconnected_t, wifi_event_t, IP_EVENT, WIFI_EVENT};
-
   if event_base == unsafe { WIFI_EVENT } {
     let event_id: wifi_event_t = unsafe { transmute(event_id) };
 
