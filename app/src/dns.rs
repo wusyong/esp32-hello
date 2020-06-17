@@ -1,12 +1,9 @@
-use std::thread;
-use std::net::UdpSocket;
-use std::mem::{size_of, transmute};
-use std::mem::MaybeUninit;
-use std::net::Ipv4Addr;
 use std::iter::Iterator;
-use std::ffi::CStr;
+use std::net::{Ipv4Addr, UdpSocket};
+use std::mem::{size_of, MaybeUninit};
+use std::thread;
 
-use esp_idf_bindgen::{esp_netif_get_ip_info, esp_netif_get_handle_from_ifkey, esp_netif_ip_info_t};
+use esp_idf_hal::netif::IpInfo;
 
 use dnsparse::*;
 
@@ -60,31 +57,14 @@ pub fn handle_request(request: DnsFrame, ip: &Ipv4Addr) -> DnsFrame {
   response
 }
 
-#[derive(Debug)]
-struct IpInfo {
-  address: Ipv4Addr,
-  netmask: Ipv4Addr,
-  gateway: Ipv4Addr,
-}
 
 pub fn server() {
   println!("Starting DNS server …");
 
-  let info: IpInfo = unsafe {
-    let mut info = MaybeUninit::<esp_netif_ip_info_t>::uninit();
-    let interface = esp_netif_get_handle_from_ifkey(CStr::from_bytes_with_nul_unchecked(b"WIFI_AP_DEF\0").as_ptr());
-    esp_netif_get_ip_info(interface, info.as_mut_ptr());
-    let info = info.assume_init();
-    IpInfo {
-      address: transmute(info.ip),
-      netmask: transmute(info.netmask),
-      gateway: transmute(info.gw),
-    }
-  };
-
-  println!("IP: {:?}", info);
-
   let socket = UdpSocket::bind("0.0.0.0:53").unwrap();
+
+  let ip = *IpInfo::ap().unwrap().ip();
+  println!("IP: {:?}", ip);
 
   'outer: loop {
     thread::yield_now();
@@ -109,7 +89,7 @@ pub fn server() {
       (frame.assume_init(), src)
     };
 
-    let response = handle_request(request, &info.address);
+    let response = handle_request(request, &ip);
 
     if let Err(err) = socket.send_to(&response, src) {
       eprintln!("Error sending response to '{:?}': {}", src, err);

@@ -12,6 +12,7 @@ macaddr = "1"
 memchr = "2"
 
 [features]
-default = []
+default = ["std"]
+std = []
 
 panic_handler = []

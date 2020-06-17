@@ -1,6 +1,6 @@
 #![feature(never_type)]
 #![warn(missing_debug_implementations)]
-#![no_std]
+#![cfg_attr(not(feature = "std"), no_std)]
 
 use core::fmt::Write;
 use core::mem::MaybeUninit;
@@ -15,6 +15,7 @@ use esp_idf_bindgen::{esp_err_t, esp_mac_type_t, ESP_OK, esp_err_to_name, esp_re
 pub mod gpio;
 pub mod ets;
 pub mod uart;
+pub mod netif;
 pub mod wifi;
 pub mod nvs;
 

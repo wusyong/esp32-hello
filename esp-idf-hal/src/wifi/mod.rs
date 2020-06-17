@@ -2,14 +2,18 @@ use core::marker::PhantomData;
 use core::mem::transmute;
 use core::str::Utf8Error;
 use core::ptr;
+use core::mem;
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use alloc::string::String;
+use std::net::Ipv4Addr;
+
 
 use core::fmt;
+use macaddr::MacAddr6;
 
-use crate::{EspError, nvs::NonVolatileStorage, hprintln};
+use crate::{EspError, nvs::NonVolatileStorage, netif::IpInfo, hprintln};
 
 use esp_idf_bindgen::{
   libc,
@@ -195,14 +199,41 @@ impl fmt::Display for Password {
 #[derive(Debug, Clone, Copy)]
 pub enum AuthMode {
   Open,
+  Wep,
+  WpaPsk,
+  WpaWpa2Psk,
   Wpa2Psk,
+  Wpa3Psk,
+  Wpa2Enterprise,
+  Max,
+}
+
+impl From<wifi_auth_mode_t> for AuthMode {
+  fn from(auth_mode: wifi_auth_mode_t) -> Self {
+    match auth_mode {
+      wifi_auth_mode_t::WIFI_AUTH_OPEN => AuthMode::Open,
+      wifi_auth_mode_t::WIFI_AUTH_WEP => AuthMode::Wep,
+      wifi_auth_mode_t::WIFI_AUTH_WPA_PSK => AuthMode::WpaPsk,
+      wifi_auth_mode_t::WIFI_AUTH_WPA_WPA2_PSK => AuthMode::WpaWpa2Psk,
+      wifi_auth_mode_t::WIFI_AUTH_WPA2_PSK => AuthMode::Wpa2Psk,
+      wifi_auth_mode_t::WIFI_AUTH_WPA3_PSK => AuthMode::Wpa3Psk,
+      wifi_auth_mode_t::WIFI_AUTH_WPA2_ENTERPRISE => AuthMode::Wpa2Enterprise,
+      wifi_auth_mode_t::WIFI_AUTH_MAX => AuthMode::Max,
+    }
+  }
 }
 
 impl From<AuthMode> for wifi_auth_mode_t {
-  fn from(auth_mode: AuthMode) -> wifi_auth_mode_t {
+  fn from(auth_mode: AuthMode) -> Self {
     match auth_mode {
       AuthMode::Open => wifi_auth_mode_t::WIFI_AUTH_OPEN,
+      AuthMode::Wep => wifi_auth_mode_t::WIFI_AUTH_WEP,
+      AuthMode::WpaPsk => wifi_auth_mode_t::WIFI_AUTH_WPA_PSK,
+      AuthMode::WpaWpa2Psk => wifi_auth_mode_t::WIFI_AUTH_WPA_WPA2_PSK,
       AuthMode::Wpa2Psk => wifi_auth_mode_t::WIFI_AUTH_WPA2_PSK,
+      AuthMode::Wpa3Psk => wifi_auth_mode_t::WIFI_AUTH_WPA3_PSK,
+      AuthMode::Wpa2Enterprise => wifi_auth_mode_t::WIFI_AUTH_WPA2_ENTERPRISE,
+      AuthMode::Max => wifi_auth_mode_t::WIFI_AUTH_MAX,
     }
   }
 }
@@ -291,7 +322,7 @@ impl Wifi {
     Ok(Wifi { mode: PhantomData })
   }
 
-  pub fn into_ap(self, config: &ApConfig) -> Result<Wifi<Ap>, EspError> {
+  pub fn into_ap(self, config: &ApConfig) -> Result<Wifi<ApConfig>, EspError> {
 
     let mut config = wifi_config_t::from(config);
 
@@ -301,7 +332,7 @@ impl Wifi {
     Ok(Wifi { mode: PhantomData })
   }
 
-  pub fn into_sta(self, config: &StaConfig) -> Result<Wifi<Sta>, EspError> {
+  pub fn into_sta(self, config: &StaConfig) -> Result<Wifi<StaConfig>, EspError> {
     let mut config = wifi_config_t::from(config);
 
     set_mode(wifi_mode_t::WIFI_MODE_STA)?;
@@ -337,52 +368,48 @@ unsafe extern "C" fn wifi_scan_done_handler(
   }
 }
 
-pub struct Sta;
-pub struct Ap;
-
-
-
 #[must_use = "WiFi will be stopped immediately. Drop it explicitly after you are done using it or create a named binding."]
 #[derive(Debug)]
-pub struct StaRunning(pub [u8; 4]);
+pub enum WifiRunning {
+  Sta(Ipv4Addr),
+  Ap,
+}
 
-#[must_use = "WiFi will be stopped immediately. Drop it explicitly after you are done using it or create a named binding."]
-#[derive(Debug)]
-pub struct ApRunning;
+impl WifiRunning {
+  pub fn mode(&self) -> WifiMode {
+    match self {
+      Self::Sta(..) => WifiMode::Sta,
+      Self::Ap => WifiMode::Ap,
+    }
+  }
+}
 
-impl ApRunning {
+#[derive(Debug, PartialEq)]
+pub enum WifiMode {
+  Sta,
+  Ap
+}
+
+impl WifiRunning {
   pub fn stop(self) -> Wifi<()> {
     Wifi { mode: PhantomData }
   }
 }
 
-impl StaRunning {
-  pub fn stop(self) -> Wifi<()> {
-    Wifi { mode: PhantomData }
-  }
-}
-
-impl Drop for ApRunning {
+impl Drop for WifiRunning {
   fn drop(&mut self) {
     let _ = wifi_stop();
   }
 }
 
-impl Drop for StaRunning {
-  fn drop(&mut self) {
-    let _ = wifi_stop();
-  }
-}
-
-
-impl Wifi<Ap> {
-  pub fn start(self) -> ApRunning {
+impl Wifi<ApConfig> {
+  pub fn start(self) -> WifiRunning {
     wifi_start().unwrap();
-    ApRunning
+    WifiRunning::Ap
   }
 }
 
-impl Wifi<Sta> {
+impl Wifi<StaConfig> {
   pub fn connect(self) -> ConnectFuture {
     ConnectFuture { state: ConnectFutureState::Starting }
   }
@@ -392,7 +419,8 @@ impl Wifi<Sta> {
 enum ConnectFutureState {
   Failed(WifiError),
   Starting,
-  Connected([u8; 4]),
+  ConnectedWithoutIp { ssid: Ssid, bssid: MacAddr6, channel: u8, auth_mode: AuthMode },
+  Connected { ip_info: IpInfo, ssid: Ssid, bssid: MacAddr6, channel: u8, auth_mode: AuthMode },
 }
 
 #[must_use = "futures do nothing unless polled"]
@@ -431,7 +459,7 @@ impl fmt::Display for WifiError {
 }
 
 impl core::future::Future for ConnectFuture {
-  type Output = Result<StaRunning, WifiError>;
+  type Output = Result<WifiRunning, WifiError>;
 
   #[cfg(target_device = "esp8266")]
   fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
@@ -464,6 +492,9 @@ impl core::future::Future for ConnectFuture {
         wifi_start()?;
         Poll::Pending
       },
+      ConnectFutureState::ConnectedWithoutIp { .. } => {
+        Poll::Pending
+      }
       state => {
         EspError::result(unsafe { esp_event_handler_unregister(WIFI_EVENT, wifi_event_t::WIFI_EVENT_STA_START as _, Some(wifi_sta_handler)) })?;
         EspError::result(unsafe { esp_event_handler_unregister(WIFI_EVENT, wifi_event_t::WIFI_EVENT_STA_CONNECTED as _, Some(wifi_sta_handler)) })?;
@@ -471,13 +502,13 @@ impl core::future::Future for ConnectFuture {
         EspError::result(unsafe { esp_event_handler_unregister(IP_EVENT, ip_event_t::IP_EVENT_STA_GOT_IP as _, Some(wifi_sta_handler)) })?;
 
         match *state {
-          ConnectFutureState::Starting => unreachable!(),
+          ConnectFutureState::Starting | ConnectFutureState::ConnectedWithoutIp { .. } => unreachable!(),
           ConnectFutureState::Failed(ref err) => {
             let _ = wifi_stop();
             Poll::Ready(Err(err.clone().into()))
           },
-          ConnectFutureState::Connected(ip) => {
-            Poll::Ready(Ok(StaRunning(ip)))
+          ConnectFutureState::Connected { ref ip_info, .. } => {
+            Poll::Ready(Ok(WifiRunning::Sta(*ip_info.ip())))
           }
         }
       }
@@ -512,11 +543,19 @@ unsafe extern "C" fn wifi_sta_handler(
         }
       },
       wifi_event_t::WIFI_EVENT_STA_CONNECTED => {
-        let data = *(event_data as *mut wifi_event_sta_connected_t);
-        hprintln!("EVENT_DATA: {:?}", data);
+        let data = &*(event_data as *const wifi_event_sta_connected_t);
+
+        let ssid = Ssid { ssid: data.ssid, ssid_len: data.ssid_len as usize };
+        let channel = data.channel;
+        let bssid = MacAddr6::from(data.bssid);
+        let auth_mode = AuthMode::from(data.authmode);
+
+        f.state = ConnectFutureState::ConnectedWithoutIp { ssid, bssid, channel, auth_mode };
+
+        hprintln!("EVENT_DATA: {:?}", f.state);
       },
       wifi_event_t::WIFI_EVENT_STA_DISCONNECTED => {
-        let data = *(event_data as *mut wifi_event_sta_disconnected_t);
+        let data = &*(event_data as *const wifi_event_sta_disconnected_t);
         let reason: wifi_err_reason_t = transmute(data.reason as u32);
 
         hprintln!("EVENT_DATA: {:?}", data);
@@ -533,9 +572,17 @@ unsafe extern "C" fn wifi_sta_handler(
 
     match event_id {
       ip_event_t::IP_EVENT_STA_GOT_IP => {
-        let event: ip_event_got_ip_t = *(event_data as *mut ip_event_got_ip_t);
+        let event = &*(event_data as *const ip_event_got_ip_t);
         let octets = u32::from_be(event.ip_info.ip.addr).to_be_bytes();
-        f.state = ConnectFutureState::Connected(octets);
+
+        if let ConnectFutureState::ConnectedWithoutIp { ssid, bssid, channel, auth_mode } = mem::replace(&mut f.state, ConnectFutureState::Starting) {
+          f.state = ConnectFutureState::Connected { ip_info: IpInfo::from_native_unchecked(event.ip_info), ssid, bssid, channel, auth_mode };
+        } else {
+          unreachable!();
+        }
+
+        hprintln!("EVENT_DATA: {:?}", f.state);
+
         waker.wake();
       },
       _ => (),

@@ -22,8 +22,8 @@ pub async fn handle_request(
   mut client: TcpStream, addr: SocketAddr,
   ap_config: &ApConfig,
   wifi_storage: &mut NameSpace,
-  mut ap_running: Option<ApRunning>, mut sta_running: Option<StaRunning>,
-) -> io::Result<(Option<ApRunning>, Option<StaRunning>)> {
+  mut wifi_running: WifiRunning,
+) -> io::Result<WifiRunning> {
   println!("Handling request from {} …", addr);
 
   let mut buf: [u8; 1024] = [0; 1024];
@@ -69,7 +69,9 @@ pub async fn handle_request(
               wifi_storage.set::<&str>("ssid", &ssid.as_str()).expect("Failed saving SSID");
               wifi_storage.set::<&str>("password", &password.as_str()).expect("Failed saving password");
 
-              if let Some(wifi) = ap_running.take().map(|w| w.stop()) {
+              if wifi_running.mode() == WifiMode::Ap {
+                let wifi = wifi_running.stop();
+
                 let sta_config = StaConfig::builder()
                   .ssid(ssid)
                   .password(password)
@@ -81,13 +83,14 @@ pub async fn handle_request(
 
                 match sta.connect().await {
                   Ok(sta) => {
-                    let StaRunning(ip) = sta;
-                    println!("Connected to '{}' with IP '{}'.", sta_config.ssid(), Ipv4Addr::from(ip));
-                    sta_running = Some(sta);
+                    if let WifiRunning::Sta(ip) = sta {
+                      println!("Connected to '{}' with IP '{}'.", sta_config.ssid(), Ipv4Addr::from(ip));
+                    }
+                    wifi_running = sta;
                   },
                   Err(err) => {
                     let ap = err.wifi().into_ap(&ap_config).unwrap();
-                    ap_running = Some(ap.start());
+                    wifi_running = ap.start();
                   }
                 }
               }
@@ -106,5 +109,5 @@ pub async fn handle_request(
     writeln!(client)?;
   }
 
-  Ok((ap_running, sta_running))
+  Ok(wifi_running)
 }

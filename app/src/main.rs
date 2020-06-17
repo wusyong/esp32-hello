@@ -138,8 +138,7 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
         let ssid = wifi_storage.get::<String>("ssid").ok().and_then(|s| Ssid::from_bytes(s.as_bytes()).ok());
         let password = wifi_storage.get::<String>("password").ok().and_then(|s| Password::from_bytes(s.as_bytes()).ok());
 
-        let mut ap_running = None;
-        let mut sta_running = None;
+        let mut wifi_running;
 
         if let (Some(ssid), Some(password)) = (ssid, password) {
           let sta_config = StaConfig::builder()
@@ -151,19 +150,18 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
 
             match sta.connect().await {
               Ok(sta) => {
-                let StaRunning(ip) = sta;
-                println!("Connected to '{}' with IP '{}'.", sta_config.ssid(), Ipv4Addr::from(ip));
-                sta_running = Some(sta);
+                if let WifiRunning::Sta(ip) = sta {
+                  println!("Connected to '{}' with IP '{}'.", sta_config.ssid(), Ipv4Addr::from(ip));
+                }
+                wifi_running = sta;
               },
               Err(err) => {
-                let ap = err.wifi().into_ap(&ap_config).unwrap();
-                ap_running = Some(ap.start());
+                wifi_running = err.wifi().into_ap(&ap_config).unwrap().start();
               }
             }
         } else {
           println!("Starting Access Point '{}' …", ap_config.ssid());
-          let ap = wifi.into_ap(&ap_config).unwrap();
-          ap_running = Some(ap.start());
+          wifi_running = wifi.into_ap(&ap_config).unwrap().start();
         }
 
         let stream = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 80)).expect("failed starting TCP listener");
@@ -171,16 +169,16 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
         loop {
           match stream.accept() {
             Ok((client, addr)) => {
-              match handle_request(client, addr, &ap_config, &mut wifi_storage, ap_running.take(), sta_running.take()).await {
-                Ok((ap, sta)) => {
-                  ap_running = ap;
-                  sta_running = sta;
+              match handle_request(client, addr, &ap_config, &mut wifi_storage, wifi_running).await {
+                Ok(wr) => {
+                  wifi_running = wr;
                 },
                 Err(err) => {
                   eprintln!("Failed to handle request: {:?}", err);
+                  break;
                 },
               }
-           },
+            },
             Err(e) => {
               if e.kind() != std::io::ErrorKind::WouldBlock {
                 eprintln!("couldn't get client: {:?}", e);
