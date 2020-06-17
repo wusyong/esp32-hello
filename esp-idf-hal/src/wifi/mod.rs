@@ -308,11 +308,7 @@ impl Wifi {
   pub fn init(nvs: &mut NonVolatileStorage) -> Result<Wifi<()>, EspError> {
     netif_init()?;
 
-    match event_loop_create_default() {
-      Ok(()) => (),
-      Err(err) if err.code == ESP_ERR_INVALID_STATE as _ => (),
-      err => err.unwrap(),
-    }
+    EspError::result(unsafe { esp_event_loop_create_default() })?;
 
     unsafe { esp_idf_bindgen::esp_netif_create_default_wifi_ap() };
     unsafe { esp_idf_bindgen::esp_netif_create_default_wifi_sta() };
@@ -595,8 +591,4 @@ extern "C" fn wifi_sta_handler(
       _ => (),
     }
   }
-}
-
-pub fn event_loop_create_default() -> Result<(), EspError> {
-  EspError::result(unsafe { esp_event_loop_create_default() })
 }
