@@ -368,7 +368,7 @@ impl fmt::Display for WifiError {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
       Self::Internal(esp_error) => esp_error.fmt(f),
-      Self::ConnectionError(reason) => fmt::Debug::fmt(reason, f),
+      Self::ConnectionError(reason) => write!(f, "connection error: {:?}", reason),
     }
   }
 }
