@@ -23,5 +23,5 @@ git submodule update --init --recursive
 Afterwards, you can build the project using
 
 ```
-./build.sh
+./build.sh [--chip <chip> (default: esp32)] [--release] [--package <package> (default: app)] [--example <example>] [--flash-baudrate <baud> (default: 460800)] [--erase-flash]
 ```

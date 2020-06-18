@@ -4,15 +4,51 @@ set -euo pipefail
 
 cd "$(dirname "${0}")"
 
+CHIP=esp32
+PACKAGE=app
+EXAMPLE=
 FLASH_BAUDRATE=460800
 MONITOR_BAUDRATE=115200
+PROFILE=
+ERASE_FLASH=false
 
-serial_port="$(find /dev -name 'tty.usbserial-*' 2>/dev/null | head -n 1 || true)"
+while (( ${#@} )); do
+  echo "${1}"
 
-chip="${1:-esp32}"
-target="xtensa-${chip}-none-elf"
+  case "${1}" in
+    --chip)
+      shift
+      CHIP="${1}"
+      ;;
+    -p|--package)
+      shift
+      PACKAGE="${1}"
+      ;;
+    --example)
+      shift
+      EXAMPLE="${1}"
+      ;;
+    --release)
+      PROFILE=release
+      ;;
+    --flash-baudrate)
+      shift
+      FLASH_BAUDRATE="${1}"
+      ;;
+    --erase-flash)
+      ERASE_FLASH=true
+      ;;
+    *)
+      echo "Invalid argument: '${1}'" >&2
+      exit 1
+      ;;
+    esac
+  shift
+done
 
-profile=release
+SERIAL_PORT="$(find /dev -name 'tty.usbserial-*' 2>/dev/null | head -n 1 || true)"
+
+TARGET="xtensa-${CHIP}-none-elf"
 
 IDF_PATH="$(pwd)/esp-idf"
 export IDF_PATH
@@ -22,28 +58,66 @@ export IDF_TOOLS_PATH
 
 mkdir -p "${IDF_TOOLS_PATH}"
 
-cross build ${profile:+--${profile}} --target "${target}" --package app -vv
+cross build ${PROFILE:+"--${PROFILE}"} --target "${TARGET}" ${PACKAGE:+--package "${PACKAGE}"} ${EXAMPLE:+--example "${EXAMPLE}"} -vv
 
-cross doc ${profile:+--${profile}} --target "${target}" --no-deps
+# cross doc ${PROFILE:+"--${PROFILE}"} --target "${target}" --no-deps
 
-if [[ -z "${serial_port}" ]]; then
+if [[ -z "${SERIAL_PORT}" ]]; then
   exit
 fi
 
-# esptool.py --chip "${chip}" --port "${serial_port}" --baud "${FLASH_BAUDRATE}" --before default_reset --after hard_reset erase_flash
+esptool() {
+  time esptool.py --chip "${CHIP}" --port "${SERIAL_PORT}" ${FLASH_BAUDRATE:+--baud "${FLASH_BAUDRATE}"} "${@}"
+}
 
-bootloader_offset=0x0000
+FLASH_ARGS=( -z --flash_mode dio --flash_freq 80m --flash_size detect )
 
-if [[ "${chip}" = 'esp32' ]]; then
-  bootloader_offset=0x1000
+if [[ "${CHIP}" = 'esp32' ]]; then
+  BOOTLOADER_OFFSET=0x1000
+else
+  BOOTLOADER_OFFSET=0x0000
+fi
+BOOTLOADER_BINARY="target/${TARGET}/esp-build/bootloader/bootloader.bin"
+PARTITION_TABLE_OFFSET=0x8000
+PARTITION_TABLE_BINARY="target/${TARGET}/esp-build/partitions.bin"
+APPLICATION_OFFSET=0x10000
+if [[ -n "${EXAMPLE-}" ]]; then
+  BINARY_PATH="examples/${EXAMPLE}"
+else
+  BINARY_PATH="${PACKAGE}"
+fi
+APPLICATION_BINARY="target/${TARGET}/${PROFILE:-debug}/${BINARY_PATH}.bin"
+
+echo "Verifying bootloader …"
+if esptool --no-stub --after no_reset verify_flash "${BOOTLOADER_OFFSET}" "${BOOTLOADER_BINARY}" &>/dev/null; then
+  echo 'Bootloader is up to date.'
+else
+  echo 'Flashing new bootloader …'
+  esptool --after no_reset write_flash "${FLASH_ARGS[@]}" \
+    "${BOOTLOADER_OFFSET}" "target/${TARGET}/esp-build/bootloader/bootloader.bin"
 fi
 
-time esptool.py --chip "${chip}" --port "${serial_port}" --baud "${FLASH_BAUDRATE}" --before default_reset --after hard_reset write_flash \
-  -z --flash_mode dio \
-  --flash_freq 80m \
-  --flash_size detect \
-  "${bootloader_offset}" "target/${target}/esp-build/bootloader/bootloader.bin" \
-  0x8000 "target/${target}/esp-build/partitions.bin" \
-  0x10000 "target/${target}/${profile:-debug}/app.bin"
+echo "Verifying partition table …"
+if esptool --no-stub --after no_reset verify_flash "${PARTITION_TABLE_OFFSET}" "${PARTITION_TABLE_BINARY}" &>/dev/null; then
+  echo 'Partition table is up to date.'
+else
+  echo 'Flashing new partition table …'
+  esptool --after no_reset write_flash "${FLASH_ARGS[@]}" \
+    "${PARTITION_TABLE_OFFSET}" "${PARTITION_TABLE_BINARY}"
+fi
 
-python -m serial.tools.miniterm --raw --exit-char=3 --rts=0 --dtr=0 "${serial_port}" "${MONITOR_BAUDRATE}"
+echo "Verifying application …"
+if esptool --no-stub --after no_reset verify_flash "${APPLICATION_OFFSET}" "${APPLICATION_BINARY}" &>/dev/null; then
+  echo 'Application table is up to date.'
+else
+  echo 'Flashing new application …'
+  esptool --after no_reset write_flash "${FLASH_ARGS[@]}" \
+    "${APPLICATION_OFFSET}" "${APPLICATION_BINARY}"
+fi
+
+if "${ERASE_FLASH}"; then
+  echo 'Erasing flash …'
+  esptool --after no_reset erase_flash
+fi
+
+python -m serial.tools.miniterm --raw --exit-char=3 --rts=0 --dtr=0 "${SERIAL_PORT}" "${MONITOR_BAUDRATE}"

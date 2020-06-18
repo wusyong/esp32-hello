@@ -10,7 +10,6 @@ extern crate std;
 
 use std::thread::{self, sleep};
 use std::time::Duration;
-use std::sync::{Mutex, RwLock};
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::net::TcpListener;
 
@@ -35,11 +34,6 @@ pub fn app_main() {
   })
 }
 
-use std::cell::RefCell;
-thread_local! {
-  pub static FOO: RefCell<u32> = RefCell::new(0);
-}
-
 async fn rust_blink_and_write() -> Result<!, EspError> {
     use esp32_hal::{target, gpio::GpioExt};
 
@@ -54,45 +48,7 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
 
     println!("AP started.");
 
-    FOO.with(|f| {
-      *f.borrow_mut() += 1;
-    });
-
-    thread::spawn(|| {
-      FOO.with(|f| {
-        *f.borrow_mut() += 1;
-      });
-
-      FOO.with(|f| {
-        println!("THREAD 1: {:?}", f.borrow());
-      });
-    });
-
-    thread::spawn(|| {
-      FOO.with(|f| {
-        *f.borrow_mut() += 1;
-      });
-
-      FOO.with(|f| {
-        println!("THREAD 2: {:?}", f.borrow());
-      });
-    });
-
-    FOO.with(|f| {
-      println!("MAIN THREAD: {:?}", f.borrow());
-    });
-
     // esp32_hal::wifi::wifi_scan(true, false, 1000)?;
-
-    let mutex = Mutex::new(0usize);
-    println!("mutex value = {:?}", *mutex.lock().unwrap());
-    *mutex.lock().unwrap() = 1;
-    println!("mutex value = {:?}", *mutex.lock().unwrap());
-
-    let rwlock = RwLock::new(0usize);
-    println!("rwlock value = {:?}", *rwlock.read().unwrap());
-    *rwlock.write().unwrap() = 1;
-    println!("rwlock value = {:?}", *rwlock.read().unwrap());
 
     let namespace = nvs.open("wifi")?;
     println!("namespace: {:?}", namespace);
