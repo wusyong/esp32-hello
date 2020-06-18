@@ -25,3 +25,16 @@ Afterwards, you can build the project using
 ```
 ./build.sh [--chip <chip> (default: esp32)] [--release] [--package <package> (default: app)] [--example <example>] [--flash-baudrate <baud> (default: 460800)] [--erase-flash]
 ```
+
+For example, you can build the main example application in debug mode using
+
+```
+./build
+```
+
+or the `thread_local` example in release mode using
+
+
+```
+./build --release --example thread_local
+```
