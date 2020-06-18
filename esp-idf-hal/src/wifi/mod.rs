@@ -2,14 +2,11 @@ use core::marker::PhantomData;
 use core::mem::transmute;
 use core::str::Utf8Error;
 use core::ptr;
-use core::mem;
-use std::mem::ManuallyDrop;
+use std::mem::{self, MaybeUninit, ManuallyDrop};
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use alloc::string::String;
-use std::net::Ipv4Addr;
-
 
 use core::fmt;
 use macaddr::MacAddr6;
@@ -227,7 +224,6 @@ pub fn wifi_scan(show_hidden: bool, passive: bool, max_ms_per_channel: u32) -> R
 #[derive(Debug)]
 pub struct Wifi<T = ()> {
   config: T,
-  stopper: Option<WifiStopper>,
 }
 
 impl Wifi {
@@ -242,7 +238,7 @@ impl Wifi {
     let config = wifi_init_config_t::default();
     EspError::result(unsafe { esp_wifi_init(&config) })?;
 
-    Ok(Wifi { config: (), stopper: None })
+    Ok(Wifi { config: () })
   }
 
   pub fn start_ap(self, config: ApConfig) -> Result<WifiRunning, WifiError> {
@@ -250,7 +246,7 @@ impl Wifi {
     EspError::result(unsafe { esp_wifi_set_mode(wifi_mode_t::WIFI_MODE_AP) })?;
     EspError::result(unsafe { esp_wifi_set_config(esp_interface_t::ESP_IF_WIFI_AP, &mut ap_config) })?;
     EspError::result(unsafe { esp_wifi_start() })?;
-    Ok(WifiRunning::Ap(Wifi { config, stopper: Some(WifiStopper) }))
+    Ok(WifiRunning::Ap(Wifi { config }))
   }
 
   pub fn connect_sta(self, config: StaConfig) -> ConnectFuture {
@@ -264,7 +260,7 @@ impl Wifi {
       ConnectFutureState::Starting
     };
 
-    ConnectFuture { config: Some(config), state }
+    ConnectFuture { config, state }
   }
 }
 
@@ -297,7 +293,7 @@ unsafe extern "C" fn wifi_scan_done_handler(
 #[must_use = "WiFi will be stopped immediately. Drop it explicitly after you are done using it or create a named binding."]
 #[derive(Debug)]
 pub enum WifiRunning {
-  Sta(Wifi<StaConfig>, Ipv4Addr),
+  Sta(Wifi<StaConfig>, IpInfo),
   Ap(Wifi<ApConfig>),
 }
 
@@ -316,29 +312,35 @@ pub enum WifiMode {
   Ap
 }
 
-impl WifiRunning {
-  pub fn stop(self) -> Wifi<()> {
-    Wifi { config: (), stopper: None }
-  }
-}
-
-#[derive(Debug)]
-struct WifiStopper;
-
-impl Drop for WifiStopper {
-  fn drop(&mut self) {
-    let _ = EspError::result(unsafe { esp_wifi_stop() });
-  }
-}
-
 impl<T> Wifi<T> {
-  pub fn into_uninit(self) -> (T, Wifi<()>) {
-    let Self { config, .. } = self;
-    (config, Wifi { config: (), stopper: None })
-  }
-
   pub fn config(&self) -> &T {
     &self.config
+  }
+}
+
+impl<T> Drop for Wifi<T> {
+  fn drop(&mut self) {
+    if mem::size_of::<T>() != 0 {
+      unsafe { esp_wifi_stop() };
+    }
+  }
+}
+
+impl Wifi<StaConfig> {
+  pub fn stop(mut self) -> (StaConfig, Wifi<()>) {
+    let config = MaybeUninit::uninit();
+    let config = mem::replace(&mut self.config, unsafe { config.assume_init() });
+    mem::forget(self);
+    (config, Wifi { config: () })
+  }
+}
+
+impl Wifi<ApConfig> {
+  pub fn stop(mut self) -> (ApConfig, Wifi<()>) {
+    let config = MaybeUninit::uninit();
+    let config = mem::replace(&mut self.config, unsafe { config.assume_init() });
+    mem::forget(self);
+    (config, Wifi { config: () })
   }
 }
 
@@ -352,7 +354,7 @@ enum ConnectFutureState {
 
 #[must_use = "futures do nothing unless polled"]
 pub struct ConnectFuture {
-  config: Option<StaConfig>,
+  config: StaConfig,
   state: ConnectFutureState,
 }
 
@@ -367,7 +369,7 @@ pub enum WifiError {
 
 impl WifiError {
   pub fn wifi(self) -> Wifi<()> {
-    Wifi { config: (), stopper: None }
+    Wifi { config: () }
   }
 }
 
@@ -436,19 +438,19 @@ impl core::future::Future for ConnectFuture {
       ConnectFutureState::ConnectedWithoutIp { .. } => {
         Poll::Pending
       }
-      state => {
+      _ => {
         unregister_sta_handlers();
 
-        match *state {
+        match self.state {
           ConnectFutureState::Starting | ConnectFutureState::ConnectedWithoutIp { .. } => unreachable!(),
           ConnectFutureState::Failed(ref err) => {
             let _ = EspError::result(unsafe { esp_wifi_stop() });
             Poll::Ready(Err(err.clone().into()))
           },
-          ConnectFutureState::Connected { ref ip_info, .. } => {
-            let ip = *ip_info.ip();
-            let config = self.as_mut().config.take().unwrap();
-            Poll::Ready(Ok(WifiRunning::Sta(Wifi { config, stopper: Some(WifiStopper) }, ip)))
+          ConnectFutureState::Connected { ref mut ip_info, .. } => {
+            let ip_info = mem::replace(ip_info, unsafe { MaybeUninit::uninit().assume_init() });
+            let config = mem::replace(&mut self.as_mut().config, unsafe { MaybeUninit::uninit().assume_init() });
+            Poll::Ready(Ok(WifiRunning::Sta(Wifi { config }, ip_info)))
           }
         }
       }

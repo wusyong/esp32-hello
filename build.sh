@@ -88,6 +88,11 @@ else
 fi
 APPLICATION_BINARY="target/${TARGET}/${PROFILE:-debug}/${BINARY_PATH}.bin"
 
+if "${ERASE_FLASH}"; then
+  echo 'Erasing flash …'
+  esptool --after no_reset erase_flash
+fi
+
 echo "Verifying bootloader …"
 if esptool --no-stub --after no_reset verify_flash "${BOOTLOADER_OFFSET}" "${BOOTLOADER_BINARY}" &>/dev/null; then
   echo 'Bootloader is up to date.'
@@ -113,11 +118,6 @@ else
   echo 'Flashing new application …'
   esptool --after no_reset write_flash "${FLASH_ARGS[@]}" \
     "${APPLICATION_OFFSET}" "${APPLICATION_BINARY}"
-fi
-
-if "${ERASE_FLASH}"; then
-  echo 'Erasing flash …'
-  esptool --after no_reset erase_flash
 fi
 
 python -m serial.tools.miniterm --raw --exit-char=3 --rts=0 --dtr=0 "${SERIAL_PORT}" "${MONITOR_BAUDRATE}"

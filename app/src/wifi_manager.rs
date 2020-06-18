@@ -1,5 +1,5 @@
 use std::io::{self, Read, Write};
-use std::net::{Ipv4Addr, SocketAddr, TcpStream};
+use std::net::{SocketAddr, TcpStream};
 
 use esp_idf_hal::{nvs::NameSpace, wifi::*};
 
@@ -87,26 +87,8 @@ pub async fn handle_request(
             wifi_storage.set::<&str>("password", &password.as_str()).expect("Failed saving password");
 
             if let WifiRunning::Ap(ap) = wifi_running {
-              let (ap_config, wifi) = ap.into_uninit();
-
-              let sta_config = StaConfig::builder()
-                .ssid(ssid)
-                .password(password)
-                .build();
-
-              println!("Connecting to '{}' with password '{}' …", sta_config.ssid(), sta_config.password());
-
-              match wifi.connect_sta(sta_config).await {
-                Ok(sta) => {
-                  if let WifiRunning::Sta(ref sta, ip) = sta {
-                    println!("Connected to '{}' with IP '{}'.", sta.config().ssid(), Ipv4Addr::from(ip));
-                  }
-                  wifi_running = sta;
-                },
-                Err(err) => {
-                  wifi_running = err.wifi().start_ap(ap_config).unwrap();
-                }
-              }
+              let (ap_config, wifi) = ap.stop();
+              wifi_running = connect_ssid_password(wifi, ap_config, ssid, password).await;
             }
           }
         }
@@ -119,5 +101,30 @@ pub async fn handle_request(
     handle_internal_error(client)
   };
 
+  if let Err(err) = res {
+    eprintln!("Error handling request: {}", err);
+  }
+
   wifi_running
+}
+
+pub async fn connect_ssid_password(wifi: Wifi<()>, ap_config: ApConfig, ssid: Ssid, password: Password) -> WifiRunning {
+  let sta_config = StaConfig::builder()
+    .ssid(ssid)
+    .password(password)
+    .build();
+
+  println!("Connecting to '{}' with password '{}' …", sta_config.ssid(), sta_config.password());
+
+  match wifi.connect_sta(sta_config).await {
+    Ok(sta) => {
+      if let WifiRunning::Sta(ref sta, ref ip_info) = sta {
+        println!("Connected to '{}' with IP '{}'.", sta.config().ssid(), ip_info.ip());
+      }
+      sta
+    },
+    Err(err) => {
+      err.wifi().start_ap(ap_config).unwrap()
+    }
+  }
 }

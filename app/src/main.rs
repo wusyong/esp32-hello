@@ -102,22 +102,7 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
         let mut wifi_running;
 
         if let (Some(ssid), Some(password)) = (ssid, password) {
-          let sta_config = StaConfig::builder()
-            .ssid(ssid)
-            .password(password)
-            .build();
-
-            match wifi.connect_sta(sta_config).await {
-              Ok(sta) => {
-                if let WifiRunning::Sta(ref sta, ip) = sta {
-                  println!("Connected to '{}' with IP '{}'.", sta.config().ssid(), Ipv4Addr::from(ip));
-                }
-                wifi_running = sta;
-              },
-              Err(err) => {
-                wifi_running = err.wifi().start_ap(ap_config).unwrap();
-              }
-            }
+          wifi_running = wifi_manager::connect_ssid_password(wifi, ap_config, ssid, password).await;
         } else {
           println!("Starting Access Point '{}' …", ap_config.ssid());
           wifi_running = wifi.start_ap(ap_config).unwrap();
