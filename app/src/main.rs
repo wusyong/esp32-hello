@@ -107,22 +107,20 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
             .password(password)
             .build();
 
-            let sta = wifi.into_sta(&sta_config).unwrap();
-
-            match sta.connect().await {
+            match wifi.connect_sta(sta_config).await {
               Ok(sta) => {
-                if let WifiRunning::Sta(ip) = sta {
-                  println!("Connected to '{}' with IP '{}'.", sta_config.ssid(), Ipv4Addr::from(ip));
+                if let WifiRunning::Sta(ref sta, ip) = sta {
+                  println!("Connected to '{}' with IP '{}'.", sta.config().ssid(), Ipv4Addr::from(ip));
                 }
                 wifi_running = sta;
               },
               Err(err) => {
-                wifi_running = err.wifi().into_ap(&ap_config).unwrap().start();
+                wifi_running = err.wifi().start_ap(ap_config).unwrap();
               }
             }
         } else {
           println!("Starting Access Point '{}' …", ap_config.ssid());
-          wifi_running = wifi.into_ap(&ap_config).unwrap().start();
+          wifi_running = wifi.start_ap(ap_config).unwrap();
         }
 
         let stream = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 80)).expect("failed starting TCP listener");
@@ -130,20 +128,10 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
         loop {
           match stream.accept() {
             Ok((client, addr)) => {
-              match handle_request(client, addr, &ap_config, &mut wifi_storage, wifi_running).await {
-                Ok(wr) => {
-                  wifi_running = wr;
-                },
-                Err(err) => {
-                  panic!("Failed to handle request: {:?}", err);
-                },
-              }
+              wifi_running = handle_request(client, addr, &mut wifi_storage, wifi_running).await;
             },
-            Err(e) => {
-              if e.kind() != std::io::ErrorKind::WouldBlock {
-                eprintln!("couldn't get client: {:?}", e);
-              }
-            },
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => (),
+            Err(e) => eprintln!("couldn't get client: {:?}", e),
           }
 
           thread::yield_now();

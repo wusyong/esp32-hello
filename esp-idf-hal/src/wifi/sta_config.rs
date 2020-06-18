@@ -77,6 +77,7 @@ impl From<ScanThreshold> for wifi_scan_threshold_t {
   }
 }
 
+#[derive(Debug, Clone)]
 pub struct StaConfig {
   ssid: Ssid,
   password: Password,

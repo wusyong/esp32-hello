@@ -18,16 +18,51 @@ fn ssid_and_password(params: &[u8]) -> (Option<Ssid>, Option<Password>) {
   (ssid, password)
 }
 
+fn handle_index(mut client: TcpStream) -> io::Result<()> {
+  writeln!(client, "HTTP/1.1 200 OK")?;
+  writeln!(client, "Content-Type: text/html")?;
+  writeln!(client)?;
+  writeln!(client, "{}", include_str!("index.html"))
+}
+
+fn handle_hotspot_detect(mut client: TcpStream) -> io::Result<()> {
+  writeln!(client, "HTTP/1.1 303 See Other")?;
+  writeln!(client, "Location: http://192.168.4.1/")?;
+  writeln!(client, "Content-Type: text/plain")?;
+  writeln!(client)?;
+  writeln!(client, "Redirecting …")
+}
+
+fn handle_connecting(mut client: TcpStream) -> io::Result<()> {
+  writeln!(client, "HTTP/1.1 303 See Other")?;
+  writeln!(client, "Location: http://192.168.4.1/")?;
+  writeln!(client, "Content-Type: text/plain")?;
+  writeln!(client)?;
+  writeln!(client, "Connecting …")
+}
+
+fn handle_not_found(mut client: TcpStream) -> io::Result<()> {
+  writeln!(client, "HTTP/1.1 404 Not Found")?;
+  writeln!(client)
+}
+
+fn handle_internal_error(mut client: TcpStream) -> io::Result<()> {
+  writeln!(client, "HTTP/1.1 500 INTERNAL SERVER ERROR")?;
+  writeln!(client)
+}
+
 pub async fn handle_request(
   mut client: TcpStream, addr: SocketAddr,
-  ap_config: &ApConfig,
   wifi_storage: &mut NameSpace,
   mut wifi_running: WifiRunning,
-) -> io::Result<WifiRunning> {
+) -> WifiRunning {
   println!("Handling request from {} …", addr);
 
   let mut buf: [u8; 1024] = [0; 1024];
-  let len = client.read(&mut buf).unwrap();
+  let len = match client.read(&mut buf) {
+    Ok(len) => len,
+    Err(_) => return wifi_running,
+  };
 
   let mut headers = [httparse::EMPTY_HEADER; 16];
   let mut req = httparse::Request::new(&mut headers);
@@ -37,77 +72,52 @@ pub async fn handle_request(
   println!("Status: {:?}", status);
   println!("Request: {:?}", req);
 
-  if let Ok(httparse::Status::Complete(res)) = status {
-
+  let res = if let Ok(httparse::Status::Complete(header_len)) = status {
     match req.path {
-      Some("/") => {
-        writeln!(client, "HTTP/1.1 200 OK")?;
-        writeln!(client, "Content-Type: text/html")?;
-        writeln!(client)?;
-        writeln!(client, "{}", include_str!("index.html"))?;
-      },
-      Some("/hotspot-detect.html") => {
-        writeln!(client, "HTTP/1.1 303 See Other")?;
-        writeln!(client, "Location: http://192.168.4.1/")?;
-        writeln!(client, "Content-Type: text/plain")?;
-        writeln!(client)?;
-        writeln!(client, "Redirecting …")?;
-      },
+      Some("/") => handle_index(client),
+      Some("/hotspot-detect.html") => handle_hotspot_detect(client),
       Some("/connect") => {
-        writeln!(client, "HTTP/1.1 303 See Other")?;
-        writeln!(client, "Location: http://192.168.4.1/")?;
-        writeln!(client, "Content-Type: text/plain")?;
-        writeln!(client)?;
-        writeln!(client, "Connecting …")?;
-        drop(client);
+        let res = handle_connecting(client);
 
-        match req.method {
-          Some("POST") => {
-            let body = &buf[res..len];
+        if req.method == Some("POST") {
+          let body = &buf[header_len..len];
 
-            if let (Some(ssid), Some(password)) = ssid_and_password(body) {
-              wifi_storage.set::<&str>("ssid", &ssid.as_str()).expect("Failed saving SSID");
-              wifi_storage.set::<&str>("password", &password.as_str()).expect("Failed saving password");
+          if let (Some(ssid), Some(password)) = ssid_and_password(body) {
+            wifi_storage.set::<&str>("ssid", &ssid.as_str()).expect("Failed saving SSID");
+            wifi_storage.set::<&str>("password", &password.as_str()).expect("Failed saving password");
 
-              if wifi_running.mode() == WifiMode::Ap {
-                let wifi = wifi_running.stop();
+            if let WifiRunning::Ap(ap) = wifi_running {
+              let (ap_config, wifi) = ap.into_uninit();
 
-                let sta_config = StaConfig::builder()
-                  .ssid(ssid)
-                  .password(password)
-                  .build();
+              let sta_config = StaConfig::builder()
+                .ssid(ssid)
+                .password(password)
+                .build();
 
-                println!("Connecting to '{}' with password '{}' …", sta_config.ssid(), sta_config.password());
+              println!("Connecting to '{}' with password '{}' …", sta_config.ssid(), sta_config.password());
 
-                let sta = wifi.into_sta(&sta_config).unwrap();
-
-                match sta.connect().await {
-                  Ok(sta) => {
-                    if let WifiRunning::Sta(ip) = sta {
-                      println!("Connected to '{}' with IP '{}'.", sta_config.ssid(), Ipv4Addr::from(ip));
-                    }
-                    wifi_running = sta;
-                  },
-                  Err(err) => {
-                    let ap = err.wifi().into_ap(&ap_config).unwrap();
-                    wifi_running = ap.start();
+              match wifi.connect_sta(sta_config).await {
+                Ok(sta) => {
+                  if let WifiRunning::Sta(ref sta, ip) = sta {
+                    println!("Connected to '{}' with IP '{}'.", sta.config().ssid(), Ipv4Addr::from(ip));
                   }
+                  wifi_running = sta;
+                },
+                Err(err) => {
+                  wifi_running = err.wifi().start_ap(ap_config).unwrap();
                 }
               }
             }
-          },
-          _ => {},
+          }
         }
+
+        res
       },
-      _ => {
-        writeln!(client, "HTTP/1.1 404 Not Found")?;
-        writeln!(client)?;
-      },
+      _ => handle_not_found(client),
     }
   } else {
-    writeln!(client, "HTTP/1.1 500 INTERNAL SERVER ERROR")?;
-    writeln!(client)?;
-  }
+    handle_internal_error(client)
+  };
 
-  Ok(wifi_running)
+  wifi_running
 }
