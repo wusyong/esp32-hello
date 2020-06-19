@@ -1,6 +1,6 @@
 use core::cmp;
 use core::future::Future;
-use core::mem::MaybeUninit;
+use core::mem::{self, MaybeUninit};
 use core::pin::Pin;
 use core::ptr;
 use core::task::{Poll, Context, Waker};
@@ -126,14 +126,8 @@ impl ApRecord {
 }
 
 #[derive(Debug)]
-struct ScanFutureContent {
-  waker: *const Waker,
-  state: ScanFutureState,
-}
-
-#[derive(Debug)]
 enum ScanFutureState {
-  Starting,
+  Starting(*const Waker),
   Failed(WifiError),
   Done,
 }
@@ -141,28 +135,23 @@ enum ScanFutureState {
 #[must_use = "futures do nothing unless polled"]
 #[derive(Debug)]
 pub struct ScanFuture {
-  content: Pin<Box<ScanFutureContent>>,
+  state: Pin<Box<ScanFutureState>>,
 }
 
 impl ScanFuture {
   #[inline]
-  pub(crate) fn new(scan_config: &ScanConfig) -> Self {
-    let mut content = Box::pin(ScanFutureContent {
-      waker: ptr::null(),
-      state: ScanFutureState::Starting,
-    });
+  pub(crate) fn new(config: &ScanConfig) -> Self {
+    let mut state = Box::pin(ScanFutureState::Starting(ptr::null()));
 
     if let Err(err) = EspError::result(unsafe { esp_wifi_set_mode(wifi_mode_t::WIFI_MODE_STA) }) {
-      content.state = ScanFutureState::Failed(err.into());
-      return Self { content };
+      return Self { state: Box::pin(ScanFutureState::Failed(err.into())) };
     }
 
     if let Err(err) = EspError::result(unsafe { esp_wifi_start() }) {
-      content.state = ScanFutureState::Failed(err.into());
-      return Self { content };
+      return Self { state: Box::pin(ScanFutureState::Failed(err.into())) };
     }
 
-    let (scan_type, scan_time) = match scan_config.scan_type {
+    let (scan_type, scan_time) = match config.scan_type {
       ScanType::Active { min, max } => (
         wifi_scan_type_t::WIFI_SCAN_TYPE_ACTIVE,
         wifi_scan_time_t {
@@ -183,25 +172,24 @@ impl ScanFuture {
     };
 
     let config = wifi_scan_config_t {
-      ssid: scan_config.ssid.as_ref().map_or_else(ptr::null_mut, |ssid| ssid.ssid.as_ptr() as *mut _),
-      bssid: scan_config.bssid.as_ref().map_or_else(ptr::null_mut, |bssid| bssid as *const _ as *mut _),
-      channel: scan_config.channel,
-      show_hidden: scan_config.show_hidden,
+      ssid: config.ssid.as_ref().map_or_else(ptr::null_mut, |ssid| ssid.ssid.as_ptr() as *mut _),
+      bssid: config.bssid.as_ref().map_or_else(ptr::null_mut, |bssid| bssid as *const _ as *mut _),
+      channel: config.channel,
+      show_hidden: config.show_hidden,
       scan_type,
       scan_time,
     };
 
-    if let Err(err) = register_scan_done_handler((&mut *content) as *mut _) {
-      content.state = ScanFutureState::Failed(err.into());
-      return Self { content };
+    if let Err(err) = register_scan_done_handler((&mut *state) as *mut _) {
+      return Self { state: Box::pin(ScanFutureState::Failed(err.into())) };
     };
 
     if let Err(err) = EspError::result(unsafe { esp_wifi_scan_start(&config, false) }) {
-      content.state = ScanFutureState::Failed(err.into());
-      return Self { content };
+      let _ = unregister_scan_done_handler();
+      return Self { state: Box::pin(ScanFutureState::Failed(err.into())) };
     };
 
-    Self { content }
+    Self { state }
   }
 }
 
@@ -215,33 +203,22 @@ impl Future for ScanFuture {
 
   #[cfg(target_device = "esp32")]
   fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-    match &self.content.state {
-      ScanFutureState::Starting => {
-        self.content.waker = cx.waker() as *const _;
+    match &mut *self.state {
+      ScanFutureState::Starting(ref mut waker) => {
+        *waker = cx.waker() as *const _;
         Poll::Pending
       },
-      ScanFutureState::Failed(err) => Poll::Ready(Err(err.clone().into())),
+      ScanFutureState::Failed(ref mut err) => {
+        Poll::Ready(Err(mem::replace(err, unsafe { MaybeUninit::uninit().assume_init() })))
+      },
       ScanFutureState::Done => {
-        unregister_scan_done_handler()?;
+        let unregister = unregister_scan_done_handler();
+        let aps = get_ap_records();
+        let stop = EspError::result(unsafe { esp_wifi_stop() });
 
-        let mut ap_num = 0;
-        EspError::result(unsafe { esp_wifi_scan_get_ap_num(&mut ap_num) })?;
-
-        let mut aps: Vec<MaybeUninit<wifi_ap_record_t>> = vec![MaybeUninit::uninit(); ap_num as usize];
-        EspError::result(unsafe { esp_wifi_scan_get_ap_records(&mut ap_num, aps.as_mut_ptr() as *mut wifi_ap_record_t) })?;
-
-        let aps = aps.into_iter().map(|ap| {
-          let ap = unsafe { ap.assume_init() };
-
-          let ssid_len = memchr::memchr(0, &ap.ssid).unwrap_or(ap.ssid.len());
-          let ssid = unsafe { Ssid::from_bytes_unchecked(&ap.ssid[..ssid_len]) };
-
-          let bssid = MacAddr6::from(ap.bssid);
-
-          ApRecord { ssid, bssid }
-        }).collect();
-
-        EspError::result(unsafe { esp_wifi_stop() })?;
+        unregister?;
+        let aps = aps?;
+        stop?;
 
         Poll::Ready(Ok(aps))
       }
@@ -249,12 +226,34 @@ impl Future for ScanFuture {
   }
 }
 
-fn register_scan_done_handler(b: *mut ScanFutureContent) -> Result<(), EspError> {
+#[inline]
+fn get_ap_records() -> Result<Vec<ApRecord>, EspError> {
+  let mut ap_num = 0;
+  EspError::result(unsafe { esp_wifi_scan_get_ap_num(&mut ap_num) })?;
+
+  let mut aps: Vec<MaybeUninit<wifi_ap_record_t>> = vec![MaybeUninit::uninit(); ap_num as usize];
+  EspError::result(unsafe { esp_wifi_scan_get_ap_records(&mut ap_num as _, aps.as_mut_ptr() as *mut wifi_ap_record_t) })?;
+
+  Ok(aps.into_iter().map(|ap| {
+    let ap = unsafe { ap.assume_init() };
+
+    let ssid_len = memchr::memchr(0, &ap.ssid).unwrap_or(ap.ssid.len());
+    let ssid = unsafe { Ssid::from_bytes_unchecked(&ap.ssid[..ssid_len]) };
+
+    let bssid = MacAddr6::from(ap.bssid);
+
+    ApRecord { ssid, bssid }
+  }).collect())
+}
+
+#[inline]
+fn register_scan_done_handler(b: *mut ScanFutureState) -> Result<(), EspError> {
   EspError::result(unsafe {
     esp_event_handler_register(WIFI_EVENT, wifi_event_t::WIFI_EVENT_SCAN_DONE as _, Some(wifi_scan_done_handler), b as *mut _)
   })
 }
 
+#[inline]
 fn unregister_scan_done_handler() -> Result<(), EspError> {
   EspError::result(unsafe {
     esp_event_handler_unregister(WIFI_EVENT, wifi_event_t::WIFI_EVENT_SCAN_DONE as _, Some(wifi_scan_done_handler))
@@ -268,11 +267,10 @@ extern "C" fn wifi_scan_done_handler(
   _event_id: i32,
   _event_data: *mut libc::c_void,
 ) {
-  let mut content =  unsafe { &mut *(event_handler_arg as *mut ScanFutureContent) };
-
-  content.state = ScanFutureState::Done;
-
-  if let Some(waker) = unsafe { content.waker.as_ref().take() } {
-    waker.wake_by_ref();
+  let state =  unsafe { &mut *(event_handler_arg as *mut ScanFutureState) };
+  if let ScanFutureState::Starting(waker) = mem::replace(state, ScanFutureState::Done) {
+    if let Some(waker) = unsafe { waker.as_ref() } {
+      waker.wake_by_ref();
+    }
   }
 }
