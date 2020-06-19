@@ -31,9 +31,16 @@ use macaddr::MacAddr6;
 use crate::EspError;
 use super::{Ssid, WifiError};
 
+/// Scan type used for scanning nearby WiFi networks.
+///
+/// For an explanation of the two types, refer to https://www.wi-fi.org/knowledge-center/faq/what-are-passive-and-active-scanning.
+///
+/// All durations must be between `1` and `u32::max_value()` milliseconds. A duration of `0` means that the default duration will be used.
 #[derive(Debug, Clone)]
 pub enum ScanType {
+  /// Active scanning with a minimum duration of `min` and a maximum duration of `max` per channel.
   Active { min: Duration, max: Duration },
+  /// Passive scanning with a maximum duration of `max` per channel.
   Passive { max: Duration },
 }
 
@@ -96,8 +103,11 @@ impl ScanConfigBuilder {
   }
 
   pub fn scan_type(mut self, scan_type: ScanType) -> ScanConfigBuilder {
+    #[cfg(debug)]
     if let ScanType::Active { min, max } = scan_type {
-      assert!(min <= max);
+      if max != Duration::default() {
+        assert!(min <= max);
+      }
     }
     self.scan_type = scan_type;
     self
@@ -151,13 +161,23 @@ impl ScanFuture {
       return Self { state: Box::pin(ScanFutureState::Failed(err.into())) };
     }
 
+    let duration_as_millis_rounded = |dur: Duration| {
+      let nanos = dur.as_nanos();
+
+      if nanos == 0 {
+        0
+      } else {
+        cmp::min(u32::max_value() as u128, cmp::max(1_000_000, nanos) / 1_000_000) as u32
+      }
+    };
+
     let (scan_type, scan_time) = match config.scan_type {
       ScanType::Active { min, max } => (
         wifi_scan_type_t::WIFI_SCAN_TYPE_ACTIVE,
         wifi_scan_time_t {
           active: wifi_active_scan_time_t {
-            min: cmp::min(u32::max_value() as u128, min.as_millis()) as u32,
-            max: cmp::min(u32::max_value() as u128, max.as_millis()) as u32,
+            min: duration_as_millis_rounded(min),
+            max: duration_as_millis_rounded(max),
           },
           passive: 0,
         },
@@ -166,7 +186,7 @@ impl ScanFuture {
         wifi_scan_type_t::WIFI_SCAN_TYPE_PASSIVE,
         wifi_scan_time_t {
           active: wifi_active_scan_time_t { min: 0, max: 0 },
-          passive: cmp::min(u32::max_value() as u128, max.as_millis()) as u32,
+          passive: duration_as_millis_rounded(max),
         },
       )
     };

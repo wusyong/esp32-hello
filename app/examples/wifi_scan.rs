@@ -14,10 +14,12 @@ fn app_main() {
 
     let scan_config = ScanConfig::builder()
       .show_hidden(true)
-      .scan_type(ScanType::Passive { max: Duration::from_secs(30) })
+      .scan_type(ScanType::Passive { max: Duration::from_secs(1) })
       .build();
 
     loop {
+      println!("Scanning...");
+
       match wifi.scan(&scan_config).await {
         Ok(aps) => {
           if aps.is_empty() {
