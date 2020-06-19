@@ -4,6 +4,7 @@ use esp_idf_bindgen::{wifi_config_t, wifi_ap_config_t};
 
 use super::{AuthMode, Ssid, Password};
 
+/// Configuration for an access point.
 #[derive(Clone)]
 pub struct ApConfig {
   ssid: Ssid,

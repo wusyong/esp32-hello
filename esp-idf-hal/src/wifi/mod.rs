@@ -43,6 +43,7 @@ impl fmt::Display for WifiConfigError {
   }
 }
 
+/// A WiFi SSID.
 #[derive(Clone)]
 pub struct Ssid {
   ssid: [u8; SSID_MAX_LEN],
@@ -95,6 +96,7 @@ impl fmt::Display for Ssid {
   }
 }
 
+/// A WiFi password.
 #[derive(Clone)]
 pub struct Password {
   password: [u8; PASSWORD_MAX_LEN],
@@ -157,6 +159,7 @@ impl fmt::Display for Password {
   }
 }
 
+/// A WiFi authentication mode.
 #[derive(Debug, Clone, Copy)]
 pub enum AuthMode {
   Open,
@@ -246,26 +249,12 @@ impl Wifi {
   }
 }
 
+/// A running WiFi instance.
 #[must_use = "WiFi will be stopped immediately. Drop it explicitly after you are done using it or create a named binding."]
 #[derive(Debug)]
 pub enum WifiRunning {
   Sta(Wifi<StaConfig>, IpInfo),
   Ap(Wifi<ApConfig>),
-}
-
-impl WifiRunning {
-  pub fn mode(&self) -> WifiMode {
-    match self {
-      Self::Sta(..) => WifiMode::Sta,
-      Self::Ap(..) => WifiMode::Ap,
-    }
-  }
-}
-
-#[derive(Debug, PartialEq)]
-pub enum WifiMode {
-  Sta,
-  Ap
 }
 
 impl<T> Wifi<T> {

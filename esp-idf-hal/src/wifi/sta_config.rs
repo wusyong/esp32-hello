@@ -11,6 +11,7 @@ use esp_idf_bindgen::{
 
 use super::{AuthMode, Ssid, Password};
 
+/// Scan method used when connecting to an access point.
 #[derive(Debug, Clone, Copy)]
 pub enum ScanMethod {
   Fast,
@@ -32,9 +33,11 @@ impl From<ScanMethod> for wifi_scan_method_t {
   }
 }
 
+/// Sort method for prioritization of access points to connect to.
 #[derive(Debug, Clone, Copy)]
 pub enum SortMethod {
   BySignal,
+  BySecurity,
 }
 
 impl Default for SortMethod {
@@ -47,10 +50,12 @@ impl From<SortMethod> for wifi_sort_method_t {
   fn from(sort_method: SortMethod) -> Self {
     match sort_method {
       SortMethod::BySignal => wifi_sort_method_t::WIFI_CONNECT_AP_BY_SIGNAL,
+      SortMethod::BySecurity => wifi_sort_method_t::WIFI_CONNECT_AP_BY_SECURITY,
     }
   }
 }
 
+/// Scan threshold used when connecting to an access point.
 #[derive(Debug, Clone, Copy)]
 pub struct ScanThreshold {
   rssi: i8,
@@ -75,6 +80,7 @@ impl From<ScanThreshold> for wifi_scan_threshold_t {
   }
 }
 
+/// Configuration for a station.
 #[derive(Debug, Clone)]
 pub struct StaConfig {
   ssid: Ssid,

@@ -50,6 +50,7 @@ impl Default for ScanType {
   }
 }
 
+/// Configuration used for scanning nearby WiFi networks.
 #[derive(Default, Debug, Clone)]
 pub struct ScanConfig {
   ssid: Option<Ssid>,
@@ -119,6 +120,7 @@ impl ScanConfigBuilder {
   }
 }
 
+/// An access point record returned by a `ScanFuture`.
 #[derive(Debug, Clone)]
 pub struct ApRecord {
   ssid: Ssid,
@@ -142,6 +144,7 @@ enum ScanFutureState {
   Done,
 }
 
+/// A future representing a scan of nearby WiFi networks.
 #[must_use = "futures do nothing unless polled"]
 #[derive(Debug)]
 pub struct ScanFuture {
