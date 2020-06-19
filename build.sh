@@ -56,7 +56,7 @@ export IDF_TOOLS_PATH
 
 mkdir -p "${IDF_TOOLS_PATH}"
 
-cross build ${PROFILE:+"--${PROFILE}"} --target "${TARGET}" ${PACKAGE:+--package "${PACKAGE}"} ${EXAMPLE:+--example "${EXAMPLE}"} -vv
+cross build ${PROFILE:+"--${PROFILE}"} --target "${TARGET}" ${PACKAGE:+--package "${PACKAGE}"} ${EXAMPLE:+--example "${EXAMPLE}"}
 
 # cross doc ${PROFILE:+"--${PROFILE}"} --target "${target}" --no-deps
 
