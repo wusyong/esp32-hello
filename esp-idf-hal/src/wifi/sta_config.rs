@@ -1,8 +1,6 @@
 use core::fmt;
-use core::iter::repeat;
 
 use esp_idf_bindgen::{
-  wifi_auth_mode_t,
   wifi_config_t,
   wifi_sta_config_t,
   wifi_scan_method_t,

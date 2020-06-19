@@ -3,7 +3,6 @@ use core::mem::MaybeUninit;
 
 extern crate alloc;
 
-use alloc::vec::Vec;
 use alloc::string::String;
 
 use std::ffi::{CStr, CString};

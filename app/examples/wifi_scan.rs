@@ -1,7 +1,6 @@
 #![no_main]
 
 use std::time::Duration;
-use std::thread::sleep;
 
 use futures::executor::block_on;
 
@@ -13,18 +12,28 @@ fn app_main() {
     let mut nvs = NonVolatileStorage::default();
     let mut wifi = Wifi::init(&mut nvs).unwrap();
 
+    let scan_config = ScanConfig::builder()
+      .show_hidden(true)
+      .scan_type(ScanType::Passive { max: Duration::from_secs(30) })
+      .build();
+
     loop {
-      if let Ok(aps) = wifi.scan().await {
-        println!("Found {} access points:", aps.len());
+      match wifi.scan(&scan_config).await {
+        Ok(aps) => {
+          if aps.is_empty() {
+            println!("No access points found.");
+          } else {
+            println!("Found {} access points:", aps.len());
 
-        for ap in aps {
-          println!("  - {} '{}'", ap.bssid(), ap.ssid())
+            for ap in aps {
+              println!("  - {} '{}'", ap.bssid(), ap.ssid())
+            }
+          }
         }
-      } else {
-        println!("No access points found.");
+        Err(err) => {
+          eprintln!("WiFi Scan failed: {}", err);
+        }
       }
-
-      sleep(Duration::from_secs(5));
     }
   })
 }

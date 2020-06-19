@@ -5,6 +5,7 @@ extern "C" {
   fn ets_printf(fmt: *const i8, ...) -> i32;
 }
 
+#[derive(Debug)]
 pub struct Ets;
 
 impl DelayUs<u8> for Ets {
