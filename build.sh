@@ -13,8 +13,6 @@ PROFILE=
 ERASE_FLASH=false
 
 while (( ${#@} )); do
-  echo "${1}"
-
   case "${1}" in
     --chip)
       shift
@@ -67,7 +65,8 @@ if [[ -z "${SERIAL_PORT}" ]]; then
 fi
 
 esptool() {
-  time esptool.py --chip "${CHIP}" --port "${SERIAL_PORT}" ${FLASH_BAUDRATE:+--baud "${FLASH_BAUDRATE}"} "${@}"
+  esptool.py --chip "${CHIP}" --port "${SERIAL_PORT}" ${FLASH_BAUDRATE:+--baud "${FLASH_BAUDRATE}"} "${@}" | \
+    grep -E -v 'esptool.py|Serial port|Changing baud rate|Changed.|Uploading stub|Running stub|Stub running|Configuring flash size|Leaving'
 }
 
 FLASH_ARGS=( -z --flash_mode dio --flash_freq 80m --flash_size detect )
