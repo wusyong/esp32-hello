@@ -54,35 +54,32 @@ pub struct NameSpace {
   handle: nvs_handle_t,
 }
 
-pub trait GetValue {
-  type Output;
-
-  fn get(namespace: &NameSpace, key: &CStr) -> Result<Self::Output, EspError>;
-}
-
-pub trait SetValue {
-  fn set(namespace: &mut NameSpace, key: &CStr, value: Self) -> Result<(), EspError>;
+pub trait NvsGet: Sized {
+  fn nvs_get(namespace: &NameSpace, key: &CStr) -> Result<Self, EspError>;
 }
 
 macro_rules! nvs_int {
-  ($ty:ty, $set_function:ident, $get_function:ident) => {
-    impl SetValue for $ty {
-      fn set(namespace: &mut NameSpace, key: &CStr, value: Self) -> Result<(), EspError> {
-        EspError::result(unsafe { $set_function(namespace.handle, key.as_ptr(), value) })
+  ($ty:ty as $as_ty:ty, $set_function:ident, $get_function:ident) => {
+    impl NvsSet for $ty {
+      fn nvs_set(&self, namespace: &mut NameSpace, key: &CStr) -> Result<(), EspError> {
+        EspError::result(unsafe { $set_function(namespace.handle, key.as_ptr(), *self as $as_ty) })
       }
     }
 
-    impl GetValue for $ty {
-      type Output = $ty;
-
-      fn get(namespace: &NameSpace, key: &CStr) -> Result<Self::Output, EspError> {
-        let mut out_value: Self::Output = 0;
-        EspError::result(unsafe { $get_function(namespace.handle, key.as_ptr(), &mut out_value) })?;
+    impl NvsGet for $ty {
+      fn nvs_get(namespace: &NameSpace, key: &CStr) -> Result<Self, EspError> {
+        let mut out_value = <$ty>::default();
+        EspError::result(unsafe { $get_function(namespace.handle, key.as_ptr(), &mut out_value as *mut $ty as *mut $as_ty) })?;
         Ok(out_value)
       }
     }
-  }
+  };
+  ($ty:ty, $set_function:ident, $get_function:ident) => {
+    nvs_int!($ty as $ty, $set_function, $get_function);
+  };
 }
+
+nvs_int!(bool as u8, nvs_set_u8, nvs_get_u8);
 
 nvs_int!( i8,  nvs_set_i8,  nvs_get_i8);
 nvs_int!(i16, nvs_set_i16, nvs_get_i16);
@@ -93,16 +90,54 @@ nvs_int!(u16, nvs_set_u16, nvs_get_u16);
 nvs_int!(u32, nvs_set_u32, nvs_get_u32);
 nvs_int!(u64, nvs_set_u64, nvs_get_u64);
 
-impl<'a> SetValue for &'a CStr {
-  fn set(namespace: &mut NameSpace, key: &CStr, value: Self) -> Result<(), EspError> {
-    EspError::result(unsafe { nvs_set_str(namespace.handle, key.as_ptr(), value.as_ptr()) })
+pub trait NvsSet {
+  fn nvs_set(&self, namespace: &mut NameSpace, key: &CStr) -> Result<(), EspError>;
+}
+
+impl NvsSet for &CStr {
+  fn nvs_set(&self, namespace: &mut NameSpace, key: &CStr) -> Result<(), EspError> {
+    EspError::result(unsafe { nvs_set_str(namespace.handle, key.as_ptr(), self.as_ptr()) })
   }
 }
 
-impl GetValue for CString {
-  type Output = CString;
+impl NvsSet for CString {
+  fn nvs_set(&self, namespace: &mut NameSpace, key: &CStr) -> Result<(), EspError> {
+    self.as_c_str().nvs_set(namespace, key)
+  }
+}
 
-  fn get(namespace: &NameSpace, key: &CStr) -> Result<Self::Output, EspError> {
+impl NvsSet for &[u8] {
+  fn nvs_set(&self, namespace: &mut NameSpace, key: &CStr) -> Result<(), EspError> {
+    EspError::result(unsafe { nvs_set_blob(namespace.handle, key.as_ptr(), self.as_ptr() as *const _, self.len() as u32) })
+  }
+}
+
+impl NvsSet for Vec<u8> {
+  fn nvs_set(&self, namespace: &mut NameSpace, key: &CStr) -> Result<(), EspError> {
+    self.as_slice().nvs_set(namespace, key)
+  }
+}
+
+impl NvsSet for &str {
+  fn nvs_set(&self, namespace: &mut NameSpace, key: &CStr) -> Result<(), EspError> {
+    self.as_bytes().nvs_set(namespace, key)
+  }
+}
+
+impl NvsSet for String {
+  fn nvs_set(&self, namespace: &mut NameSpace, key: &CStr) -> Result<(), EspError> {
+    self.as_str().nvs_set(namespace, key)
+  }
+}
+
+impl<T> NvsSet for &T where T: NvsSet {
+  fn nvs_set(&self, namespace: &mut NameSpace, key: &CStr) -> Result<(), EspError> {
+    (*self).nvs_set(namespace, key)
+  }
+}
+
+impl NvsGet for CString {
+  fn nvs_get(namespace: &NameSpace, key: &CStr) -> Result<Self, EspError> {
     let mut len = 0;
     EspError::result(unsafe { nvs_get_str(namespace.handle, key.as_ptr(), ptr::null_mut(), &mut len) })?;
 
@@ -113,16 +148,8 @@ impl GetValue for CString {
   }
 }
 
-impl<'a> SetValue for &'a [u8] {
-  fn set(namespace: &mut NameSpace, key: &CStr, value: Self) -> Result<(), EspError> {
-    EspError::result(unsafe { nvs_set_blob(namespace.handle, key.as_ptr(), value.as_ptr() as *const _, value.len() as u32) })
-  }
-}
-
-impl GetValue for Vec<u8> {
-  type Output = Vec<u8>;
-
-  fn get(namespace: &NameSpace, key: &CStr) -> Result<Self::Output, EspError> {
+impl NvsGet for Vec<u8> {
+  fn nvs_get(namespace: &NameSpace, key: &CStr) -> Result<Self, EspError> {
     let mut len = 0;
     EspError::result(unsafe { nvs_get_blob(namespace.handle, key.as_ptr(), ptr::null_mut(), &mut len) })?;
 
@@ -132,36 +159,22 @@ impl GetValue for Vec<u8> {
   }
 }
 
-impl GetValue for String {
-  type Output = String;
-
-  fn get(namespace: &NameSpace, key: &CStr) -> Result<Self::Output, EspError> {
-    let buffer = Vec::<u8>::get(namespace, key)?;
+impl NvsGet for String {
+  fn nvs_get(namespace: &NameSpace, key: &CStr) -> Result<Self, EspError> {
+    let buffer = Vec::<u8>::nvs_get(namespace, key)?;
     String::from_utf8(buffer).map_err(|_| EspError::from(ESP_ERR_NVS_NOT_FOUND as esp_err_t))
   }
 }
 
-impl<'a> SetValue for &'a str {
-  fn set(namespace: &mut NameSpace, key: &CStr, value: Self) -> Result<(), EspError> {
-    <&[u8]>::set(namespace, key, value.as_bytes())
-  }
-}
-
-impl SetValue for String {
-  fn set(namespace: &mut NameSpace, key: &CStr, value: Self) -> Result<(), EspError> {
-    <&str>::set(namespace, key, &value)
-  }
-}
-
 impl NameSpace {
-  pub fn get<T: GetValue>(&self, key: &str) -> Result<T::Output, EspError> {
+  pub fn get<T: NvsGet>(&self, key: &str) -> Result<T, EspError> {
     let key = CString::new(key).map_err(|_| EspError::from(ESP_ERR_NVS_NOT_FOUND as esp_err_t))?;
-    T::get(self, key.as_ref())
+    T::nvs_get(self, key.as_ref())
   }
 
-  pub fn set<T: SetValue>(&mut self, key: &str, value: T) -> Result<(), EspError> {
+  pub fn set<T: NvsSet>(&mut self, key: &str, value: T) -> Result<(), EspError> {
     let key = CString::new(key).map_err(|_| EspError::from(ESP_ERR_NVS_NOT_FOUND as esp_err_t))?;
-    T::set(self, key.as_ref(), value)
+    value.nvs_set(self, key.as_ref())
   }
 }
 
