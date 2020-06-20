@@ -1,5 +1,5 @@
 use core::fmt;
-use core::mem::{size_of, transmute};
+use core::mem::size_of;
 
 #[derive(Clone)]
 #[repr(C)]
@@ -41,8 +41,7 @@ pub enum ResponseCode {
   NonExistentRrSet,
   NotAuthoritative,
   NotZone,
-  BadOptVersion,
-  BadSignature,
+  BadOptVersionOrBadSignature,
   BadKey,
   BadTime,
   BadMode,
@@ -65,8 +64,7 @@ impl From<ResponseCode> for u16 {
       ResponseCode::NonExistentRrSet => 8,
       ResponseCode::NotAuthoritative => 9,
       ResponseCode::NotZone => 10,
-      ResponseCode::BadOptVersion => 16,
-      ResponseCode::BadSignature => 16,
+      ResponseCode::BadOptVersionOrBadSignature => 16,
       ResponseCode::BadKey => 17,
       ResponseCode::BadTime => 18,
       ResponseCode::BadMode => 19,
@@ -91,8 +89,7 @@ impl From<u16> for ResponseCode {
       8 => ResponseCode::NonExistentRrSet,
       9 => ResponseCode::NotAuthoritative,
       10 => ResponseCode::NotZone,
-      16 => ResponseCode::BadOptVersion,
-      16 => ResponseCode::BadSignature,
+      16 => ResponseCode::BadOptVersionOrBadSignature,
       17 => ResponseCode::BadKey,
       18 => ResponseCode::BadTime,
       19 => ResponseCode::BadMode,
@@ -131,12 +128,34 @@ pub enum QueryKind {
 
 impl From<u16> for QueryKind {
   fn from(n: u16) -> Self {
-    unsafe { transmute(n) }
+    match n {
+      1 => Self::A,
+      2 => Self::NS,
+      3 => Self::MD,
+      4 => Self::MF,
+      5 => Self::CNAME,
+      6 => Self::SOA,
+      7 => Self::MB,
+      8 => Self::MG,
+      9 => Self::MR,
+      10 => Self::NULL,
+      11 => Self::WKS,
+      12 => Self::PTR,
+      13 => Self::HINFO,
+      14 => Self::MINFO,
+      15 => Self::MX,
+      16 => Self::TXT,
+      252 => Self::AXFR,
+      253 => Self::MAILA,
+      254 => Self::MAILB,
+      255 => Self::ALL,
+      _ => Self::Reserved,
+    }
   }
 }
 
 impl QueryKind {
-  fn to_be_bytes(&self) -> [u8; 2] {
+  pub fn to_be_bytes(&self) -> [u8; 2] {
     (*self as u16).to_be_bytes()
   }
 }
@@ -153,14 +172,20 @@ pub enum QueryClass {
 }
 
 impl QueryClass {
-  fn to_be_bytes(&self) -> [u8; 2] {
+  pub fn to_be_bytes(&self) -> [u8; 2] {
     (*self as u16).to_be_bytes()
   }
 }
 
 impl From<u16> for QueryClass {
   fn from(n: u16) -> Self {
-    unsafe { transmute(n) }
+    match n {
+      1 => Self::IN,
+      2 => Self::CS,
+      3 => Self::CH,
+      4 => Self::HS,
+      _ => Self::Reserved,
+    }
   }
 }
 

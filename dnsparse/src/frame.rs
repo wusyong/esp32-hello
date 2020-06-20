@@ -1,8 +1,8 @@
-use core::ops::{Deref, Range};
-use core::mem::{size_of, transmute};
+use core::ops::Deref;
+use core::mem::size_of;
 use core::fmt;
 
-use crate::{DnsHeader, ResponseCode, QueryKind, QueryClass, Question, Questions};
+use crate::{DnsHeader, Question, Questions};
 
 const HEADER_SIZE: usize = size_of::<DnsHeader>();
 const MAX_MESSAGE_SIZE: usize = 512;
@@ -84,7 +84,7 @@ impl DnsFrame {
     self.len += bytes.len();
   }
 
-  pub unsafe fn set_len(&mut self, mut len: usize) {
+  pub unsafe fn set_len(&mut self, len: usize) {
     debug_assert!(len >= HEADER_SIZE && len <= (HEADER_SIZE + MAX_MESSAGE_SIZE));
     self.len = len - HEADER_SIZE;
   }

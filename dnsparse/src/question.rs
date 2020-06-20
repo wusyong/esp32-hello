@@ -1,7 +1,7 @@
 use core::fmt;
 use core::str;
 
-use crate::{DnsHeader, ResponseCode, QueryKind, QueryClass};
+use crate::{ResponseCode, QueryKind, QueryClass};
 
 #[repr(C)]
 pub struct Question {
