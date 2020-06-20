@@ -14,15 +14,23 @@ use esp_idf_bindgen::{
   nvs_open_mode_t,
   nvs_handle_t,
   nvs_get_i8,
+  nvs_set_i8,
   nvs_get_u8,
+  nvs_set_u8,
   nvs_get_i16,
+  nvs_set_i16,
   nvs_get_u16,
+  nvs_set_u16,
   nvs_get_i32,
   nvs_set_i32,
   nvs_get_u32,
+  nvs_set_u32,
   nvs_get_i64,
+  nvs_set_i64,
   nvs_get_u64,
+  nvs_set_u64,
   nvs_get_blob,
+  nvs_set_blob,
   nvs_get_str,
   nvs_set_str,
   nvs_flash_init_partition,
@@ -46,100 +54,53 @@ pub struct NameSpace {
   handle: nvs_handle_t,
 }
 
-pub trait GetValue: Sized {
+pub trait GetValue {
   type Output;
 
   fn get(namespace: &NameSpace, key: &CStr) -> Result<Self::Output, EspError>;
 }
 
 pub trait SetValue {
-  type Input;
-
-  fn set(namespace: &NameSpace, key: &CStr, value: Self::Input) -> Result<(), EspError>;
+  fn set(namespace: &mut NameSpace, key: &CStr, value: Self) -> Result<(), EspError>;
 }
 
-impl GetValue for i8 {
-  type Output = i8;
+macro_rules! nvs_int {
+  ($ty:ty, $set_function:ident, $get_function:ident) => {
+    impl SetValue for $ty {
+      fn set(namespace: &mut NameSpace, key: &CStr, value: Self) -> Result<(), EspError> {
+        EspError::result(unsafe { $set_function(namespace.handle, key.as_ptr(), value) })
+      }
+    }
 
-  fn get(namespace: &NameSpace, key: &CStr) -> Result<Self::Output, EspError> {
-    let mut out_value: Self = 0;
-    EspError::result(unsafe { nvs_get_i8(namespace.handle, key.as_ptr(), &mut out_value) })?;
-    Ok(out_value)
+    impl GetValue for $ty {
+      type Output = $ty;
+
+      fn get(namespace: &NameSpace, key: &CStr) -> Result<Self::Output, EspError> {
+        let mut out_value: Self::Output = 0;
+        EspError::result(unsafe { $get_function(namespace.handle, key.as_ptr(), &mut out_value) })?;
+        Ok(out_value)
+      }
+    }
   }
 }
 
-impl GetValue for i16 {
-  type Output = i16;
+nvs_int!( i8,  nvs_set_i8,  nvs_get_i8);
+nvs_int!(i16, nvs_set_i16, nvs_get_i16);
+nvs_int!(i32, nvs_set_i32, nvs_get_i32);
+nvs_int!(i64, nvs_set_i64, nvs_get_i64);
+nvs_int!( u8,  nvs_set_u8,  nvs_get_u8);
+nvs_int!(u16, nvs_set_u16, nvs_get_u16);
+nvs_int!(u32, nvs_set_u32, nvs_get_u32);
+nvs_int!(u64, nvs_set_u64, nvs_get_u64);
 
-  fn get(namespace: &NameSpace, key: &CStr) -> Result<Self::Output, EspError> {
-    let mut out_value: Self = 0;
-    EspError::result(unsafe { nvs_get_i16(namespace.handle, key.as_ptr(), &mut out_value) })?;
-    Ok(out_value)
+impl<'a> SetValue for &'a CStr {
+  fn set(namespace: &mut NameSpace, key: &CStr, value: Self) -> Result<(), EspError> {
+    EspError::result(unsafe { nvs_set_str(namespace.handle, key.as_ptr(), value.as_ptr()) })
   }
 }
 
-impl GetValue for i32 {
-  type Output = i32;
-
-  fn get(namespace: &NameSpace, key: &CStr) -> Result<Self::Output, EspError> {
-    let mut out_value: Self = 0;
-    EspError::result(unsafe { nvs_get_i32(namespace.handle, key.as_ptr(), &mut out_value) })?;
-    Ok(out_value)
-  }
-}
-
-impl GetValue for i64 {
-  type Output = i64;
-
-  fn get(namespace: &NameSpace, key: &CStr) -> Result<Self::Output, EspError> {
-    let mut out_value: Self = 0;
-    EspError::result(unsafe { nvs_get_i64(namespace.handle, key.as_ptr(), &mut out_value) })?;
-    Ok(out_value)
-  }
-}
-
-impl GetValue for u8 {
-  type Output = u8;
-
-  fn get(namespace: &NameSpace, key: &CStr) -> Result<Self::Output, EspError> {
-    let mut out_value: Self = 0;
-    EspError::result(unsafe { nvs_get_u8(namespace.handle, key.as_ptr(), &mut out_value) })?;
-    Ok(out_value)
-  }
-}
-
-impl GetValue for u16 {
-  type Output = u16;
-
-  fn get(namespace: &NameSpace, key: &CStr) -> Result<Self::Output, EspError> {
-    let mut out_value: Self = 0;
-    EspError::result(unsafe { nvs_get_u16(namespace.handle, key.as_ptr(), &mut out_value) })?;
-    Ok(out_value)
-  }
-}
-
-impl GetValue for u32 {
-  type Output = u32;
-
-  fn get(namespace: &NameSpace, key: &CStr) -> Result<Self::Output, EspError> {
-    let mut out_value: Self = 0;
-    EspError::result(unsafe { nvs_get_u32(namespace.handle, key.as_ptr(), &mut out_value) })?;
-    Ok(out_value)
-  }
-}
-
-impl GetValue for u64 {
-  type Output = u64;
-
-  fn get(namespace: &NameSpace, key: &CStr) -> Result<Self::Output, EspError> {
-    let mut out_value: Self = 0;
-    EspError::result(unsafe { nvs_get_u64(namespace.handle, key.as_ptr(), &mut out_value) })?;
-    Ok(out_value)
-  }
-}
-
-impl GetValue for String {
-  type Output = String;
+impl GetValue for CString {
+  type Output = CString;
 
   fn get(namespace: &NameSpace, key: &CStr) -> Result<Self::Output, EspError> {
     let mut len = 0;
@@ -147,37 +108,59 @@ impl GetValue for String {
 
     let mut buffer = vec![0u8; len as usize];
     EspError::result(unsafe { nvs_get_str(namespace.handle, key.as_ptr(), buffer.as_mut_ptr() as *mut _, &mut len) })?;
-    buffer.truncate(len as usize - 1);
 
-    Ok(String::from_utf8(buffer).map_err(|_| EspError::from(ESP_ERR_NVS_NOT_FOUND as esp_err_t))?)
+    Ok(unsafe { CString::from_vec_unchecked(buffer) })
   }
 }
 
-impl SetValue for i32 {
-  type Input = i32;
+impl<'a> SetValue for &'a [u8] {
+  fn set(namespace: &mut NameSpace, key: &CStr, value: Self) -> Result<(), EspError> {
+    EspError::result(unsafe { nvs_set_blob(namespace.handle, key.as_ptr(), value.as_ptr() as *const _, value.len() as u32) })
+  }
+}
 
-  fn set(namespace: &NameSpace, key: &CStr, value: Self::Input) -> Result<(), EspError> {
-    EspError::result(unsafe { nvs_set_i32(namespace.handle, key.as_ptr(), value) })
+impl GetValue for Vec<u8> {
+  type Output = Vec<u8>;
+
+  fn get(namespace: &NameSpace, key: &CStr) -> Result<Self::Output, EspError> {
+    let mut len = 0;
+    EspError::result(unsafe { nvs_get_blob(namespace.handle, key.as_ptr(), ptr::null_mut(), &mut len) })?;
+
+    let mut buffer = vec![0u8; len as usize];
+    EspError::result(unsafe { nvs_get_blob(namespace.handle, key.as_ptr(), buffer.as_mut_ptr() as *mut _, &mut len) })?;
+    Ok(buffer)
+  }
+}
+
+impl GetValue for String {
+  type Output = String;
+
+  fn get(namespace: &NameSpace, key: &CStr) -> Result<Self::Output, EspError> {
+    let buffer = Vec::<u8>::get(namespace, key)?;
+    String::from_utf8(buffer).map_err(|_| EspError::from(ESP_ERR_NVS_NOT_FOUND as esp_err_t))
   }
 }
 
 impl<'a> SetValue for &'a str {
-  type Input = &'a str;
+  fn set(namespace: &mut NameSpace, key: &CStr, value: Self) -> Result<(), EspError> {
+    <&[u8]>::set(namespace, key, value.as_bytes())
+  }
+}
 
-  fn set(namespace: &NameSpace, key: &CStr, value: Self::Input) -> Result<(), EspError> {
-    let value = CString::new(value).unwrap();
-    EspError::result(unsafe { nvs_set_str(namespace.handle, key.as_ptr(), value.as_ptr()) })
+impl SetValue for String {
+  fn set(namespace: &mut NameSpace, key: &CStr, value: Self) -> Result<(), EspError> {
+    <&str>::set(namespace, key, &value)
   }
 }
 
 impl NameSpace {
   pub fn get<T: GetValue>(&self, key: &str) -> Result<T::Output, EspError> {
-    let key = CString::new(key).unwrap();
+    let key = CString::new(key).map_err(|_| EspError::from(ESP_ERR_NVS_NOT_FOUND as esp_err_t))?;
     T::get(self, key.as_ref())
   }
 
-  pub fn set<T: SetValue>(&mut self, key: &str, value: T::Input) -> Result<(), EspError> {
-    let key = CString::new(key).unwrap();
+  pub fn set<T: SetValue>(&mut self, key: &str, value: T) -> Result<(), EspError> {
+    let key = CString::new(key).map_err(|_| EspError::from(ESP_ERR_NVS_NOT_FOUND as esp_err_t))?;
     T::set(self, key.as_ref(), value)
   }
 }
