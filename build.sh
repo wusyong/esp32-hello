@@ -58,7 +58,7 @@ mkdir -p "${IDF_TOOLS_PATH}"
 
 cross build ${PROFILE:+"--${PROFILE}"} --target "${TARGET}" ${PACKAGE:+--package "${PACKAGE}"} ${EXAMPLE:+--example "${EXAMPLE}"}
 
-# cross doc ${PROFILE:+"--${PROFILE}"} --target "${TARGET}" --no-deps
+cross doc ${PROFILE:+"--${PROFILE}"} --target "${TARGET}" --no-deps
 
 if [[ -z "${SERIAL_PORT}" ]]; then
   exit

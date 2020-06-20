@@ -86,7 +86,7 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
       .name("server_thread".into())
       .stack_size(8192)
       .spawn(move || block_on(async {
-        let mac = MacAddr::from(MacAddrType::Ap);
+        let mac = MacAddr::from(Interface::Ap);
 
         let ap_ssid = Ssid::from_bytes(format!("ESP {}", mac).as_bytes()).unwrap();
 

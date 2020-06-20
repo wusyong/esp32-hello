@@ -56,35 +56,36 @@ impl core::fmt::Display for EspError {
   }
 }
 
+/// Enumeration of all available interfaces.
 #[derive(Debug, Clone, Copy)]
-pub enum MacAddrType {
-  /// Mac address type of the WiFi interface in station mode.
+pub enum Interface {
+  /// WiFi interface in station mode.
   Sta,
-  /// Mac address type of the WiFi interface in access point mode.
+  /// WiFi interface in access point mode.
   Ap,
   #[cfg(not(target_device = "esp8266"))]
-  /// Mac address type of the Bluetooth interface.
+  /// Bluetooth interface.
   Bt,
-  /// Mac address type of the Ethernet interface.
+  /// Ethernet interface.
   #[cfg(not(target_device = "esp8266"))]
   Eth,
 }
 
 /// ```no_run
 /// use macaddr::MacAddr6;
-/// use esp32_hal::MacAddrType;
+/// use esp32_hal::Interface;
 ///
-/// MacAddr6::from(MacAddrType::Ap)
+/// MacAddr6::from(Interface::Ap)
 /// ```
-impl From<MacAddrType> for MacAddr6 {
-  fn from(mac_address_type: MacAddrType) -> Self {
-    let mac_address_type = match mac_address_type {
-      MacAddrType::Sta => esp_mac_type_t::ESP_MAC_WIFI_STA,
-      MacAddrType::Ap  => esp_mac_type_t::ESP_MAC_WIFI_SOFTAP,
+impl From<Interface> for MacAddr6 {
+  fn from(interface: Interface) -> Self {
+    let mac_address_type = match interface {
+      Interface::Sta => esp_mac_type_t::ESP_MAC_WIFI_STA,
+      Interface::Ap  => esp_mac_type_t::ESP_MAC_WIFI_SOFTAP,
       #[cfg(not(target_device = "esp8266"))]
-      MacAddrType::Bt  => esp_mac_type_t::ESP_MAC_BT,
+      Interface::Bt  => esp_mac_type_t::ESP_MAC_BT,
       #[cfg(not(target_device = "esp8266"))]
-      MacAddrType::Eth => esp_mac_type_t::ESP_MAC_ETH,
+      Interface::Eth => esp_mac_type_t::ESP_MAC_ETH,
     };
 
     let mut mac_address = MaybeUninit::<Self>::uninit();
@@ -95,12 +96,12 @@ impl From<MacAddrType> for MacAddr6 {
 
 /// ```no_run
 /// use macaddr::MacAddr;
-/// use esp32_hal::MacAddrType;
+/// use esp32_hal::Interface;
 ///
-/// MacAddr::from(MacAddrType::Ap)
+/// MacAddr::from(Interface::Ap)
 /// ```
-impl From<MacAddrType> for MacAddr {
-  fn from(mac_address_type: MacAddrType) -> Self {
-    Self::V6(mac_address_type.into())
+impl From<Interface> for MacAddr {
+  fn from(interface: Interface) -> Self {
+    Self::V6(interface.into())
   }
 }
