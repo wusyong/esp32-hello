@@ -45,14 +45,14 @@ macro_rules! nvs_int {
   ($ty:ty as $as_ty:ty, $set_function:ident, $get_function:ident) => {
     impl NvsSet for $ty {
       fn nvs_set(&self, namespace: &mut NameSpace, key: &CStr) -> Result<(), EspError> {
-        EspError::result(unsafe { $set_function(namespace.handle, key.as_ptr(), *self as $as_ty) })
+        esp_ok!($set_function(namespace.handle, key.as_ptr(), *self as $as_ty))
       }
     }
 
     impl NvsGet for $ty {
       fn nvs_get(namespace: &NameSpace, key: &CStr) -> Result<Self, EspError> {
         let mut out_value = <$ty>::default();
-        EspError::result(unsafe { $get_function(namespace.handle, key.as_ptr(), &mut out_value as *mut $ty as *mut $as_ty) })?;
+        esp_ok!($get_function(namespace.handle, key.as_ptr(), &mut out_value as *mut $ty as *mut $as_ty))?;
         Ok(out_value)
       }
     }
@@ -75,7 +75,7 @@ nvs_int!(u64, nvs_set_u64, nvs_get_u64);
 
 impl NvsSet for &CStr {
   fn nvs_set(&self, namespace: &mut NameSpace, key: &CStr) -> Result<(), EspError> {
-    EspError::result(unsafe { nvs_set_str(namespace.handle, key.as_ptr(), self.as_ptr()) })
+    esp_ok!(nvs_set_str(namespace.handle, key.as_ptr(), self.as_ptr()))
   }
 }
 
@@ -88,10 +88,10 @@ impl NvsSet for CString {
 impl NvsGet for CString {
   fn nvs_get(namespace: &NameSpace, key: &CStr) -> Result<Self, EspError> {
     let mut len = 0;
-    EspError::result(unsafe { nvs_get_str(namespace.handle, key.as_ptr(), ptr::null_mut(), &mut len) })?;
+    esp_ok!(nvs_get_str(namespace.handle, key.as_ptr(), ptr::null_mut(), &mut len))?;
 
     let mut buffer = vec![0u8; len as usize];
-    EspError::result(unsafe { nvs_get_str(namespace.handle, key.as_ptr(), buffer.as_mut_ptr() as *mut _, &mut len) })?;
+    esp_ok!(nvs_get_str(namespace.handle, key.as_ptr(), buffer.as_mut_ptr() as *mut _, &mut len))?;
 
     Ok(unsafe { CString::from_vec_unchecked(buffer) })
   }
@@ -99,7 +99,7 @@ impl NvsGet for CString {
 
 impl NvsSet for &[u8] {
   fn nvs_set(&self, namespace: &mut NameSpace, key: &CStr) -> Result<(), EspError> {
-    EspError::result(unsafe { nvs_set_blob(namespace.handle, key.as_ptr(), self.as_ptr() as *const _, self.len() as u32) })
+    esp_ok!(nvs_set_blob(namespace.handle, key.as_ptr(), self.as_ptr() as *const _, self.len() as u32))
   }
 }
 
@@ -112,10 +112,10 @@ impl NvsSet for Vec<u8> {
 impl NvsGet for Vec<u8> {
   fn nvs_get(namespace: &NameSpace, key: &CStr) -> Result<Self, EspError> {
     let mut len = 0;
-    EspError::result(unsafe { nvs_get_blob(namespace.handle, key.as_ptr(), ptr::null_mut(), &mut len) })?;
+    esp_ok!(nvs_get_blob(namespace.handle, key.as_ptr(), ptr::null_mut(), &mut len))?;
 
     let mut buffer = vec![0u8; len as usize];
-    EspError::result(unsafe { nvs_get_blob(namespace.handle, key.as_ptr(), buffer.as_mut_ptr() as *mut _, &mut len) })?;
+    esp_ok!(nvs_get_blob(namespace.handle, key.as_ptr(), buffer.as_mut_ptr() as *mut _, &mut len))?;
     Ok(buffer)
   }
 }
@@ -136,6 +136,6 @@ impl NvsSet for String {
 impl NvsGet for String {
   fn nvs_get(namespace: &NameSpace, key: &CStr) -> Result<Self, EspError> {
     let buffer = Vec::<u8>::nvs_get(namespace, key)?;
-    String::from_utf8(buffer).map_err(|_| EspError::from(ESP_ERR_NVS_NOT_FOUND as esp_err_t))
+    String::from_utf8(buffer).map_err(|_| EspError { code: ESP_ERR_NVS_NOT_FOUND as esp_err_t })
   }
 }

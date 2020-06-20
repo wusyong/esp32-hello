@@ -1,7 +1,9 @@
 use std::mem::MaybeUninit;
 use std::net::Ipv4Addr;
 
-use esp_idf_bindgen::{esp_netif_get_ip_info, esp_netif_get_handle_from_ifkey, esp_netif_ip_info_t, ESP_OK};
+use esp_idf_bindgen::{esp_netif_get_ip_info, esp_netif_get_handle_from_ifkey, esp_netif_ip_info_t};
+
+use crate::assert_esp_ok;
 
 #[derive(Debug)]
 pub struct IpInfo {
@@ -59,13 +61,8 @@ impl IpInfo {
 
   fn get_ip_info(key: &[u8]) -> Option<Self> {
     let mut ip_info = MaybeUninit::<esp_netif_ip_info_t>::uninit();
-
-    let ip_info = unsafe {
-      let interface = esp_netif_get_handle_from_ifkey(key.as_ptr() as *const _);
-      assert_eq!(esp_netif_get_ip_info(interface, ip_info.as_mut_ptr()), ESP_OK as _);
-      ip_info.assume_init()
-    };
-
-    Self::from_native(ip_info)
+    let interface = unsafe { esp_netif_get_handle_from_ifkey(key.as_ptr() as *const _) };
+    assert_esp_ok!(esp_netif_get_ip_info(interface, ip_info.as_mut_ptr()));
+    Self::from_native(unsafe { ip_info.assume_init() })
   }
 }

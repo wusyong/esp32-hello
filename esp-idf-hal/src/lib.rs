@@ -1,74 +1,42 @@
 #![feature(never_type)]
 #![warn(missing_debug_implementations)]
-#![cfg_attr(not(feature = "std"), no_std)]
 
-use core::fmt::Write;
 use core::mem::MaybeUninit;
+use std::ffi::CStr;
+use core::str;
 
 #[macro_use]
 extern crate alloc;
 
 use macaddr::{MacAddr, MacAddr6};
 
-use esp_idf_bindgen::{esp_err_t, esp_mac_type_t, ESP_OK, esp_err_to_name, esp_read_mac};
+use esp_idf_bindgen::{esp_err_t, esp_mac_type_t, esp_err_to_name, esp_read_mac};
 
 pub mod ets;
 pub mod netif;
 pub mod wifi;
 pub mod nvs;
 
-#[cfg(feature = "panic_handler")]
-#[panic_handler]
-fn panic(panic_info: &core::panic::PanicInfo) -> ! {
-  hprintln!("{}", panic_info);
-
-  unsafe {
-    abort();
-    core::hint::unreachable_unchecked()
-  }
-}
-
-#[macro_export]
-macro_rules! hprint {
-  ($($s:expr),*) => {{
-    use core::fmt::Write;
-    write!(crate::ets::Ets, $($s),*).unwrap();
-  }}
-}
-
-#[macro_export]
-macro_rules! hprintln {
-  ($($s:expr),*) => {{
-    use core::fmt::Write;
-    writeln!(crate::ets::Ets, $($s),*).unwrap();
-  }}
-}
-
-#[macro_export]
-macro_rules! ptr_set_mask {
-  ($register:expr, $mask:expr) => {
-    let ptr = $register as *mut u32;
-    core::ptr::write_volatile(ptr, core::ptr::read_volatile(ptr) | ($mask));
-  };
-}
-
-#[macro_export]
-macro_rules! ptr_clear_mask {
-  ($register:expr, $mask:expr) => {
-    let ptr = $register as *mut u32;
-    core::ptr::write_volatile(ptr, core::ptr::read_volatile(ptr) & !($mask));
-  };
-}
-
 #[derive(Clone, Debug)]
 pub struct EspError { code: esp_err_t }
 
-impl EspError {
-  pub fn result(code: esp_err_t) -> Result<(), Self> {
-    if code == ESP_OK as esp_err_t {
-      return Ok(())
+#[macro_export]
+macro_rules! esp_ok {
+  ($err:expr) => {{
+    let code = unsafe { $err };
+    if code == ::esp_idf_bindgen::ESP_OK as ::esp_idf_bindgen::esp_err_t {
+      Ok(())
     } else {
-      Err(EspError { code })
+      Err($crate::EspError { code })
+    }
+  }}
+}
+
+#[macro_export]
+macro_rules! assert_esp_ok {
+  ($err:expr) => {
+    if let Err(err) = $crate::esp_ok!($err) {
+      panic!("assertion failed: `{} == ESP_OK`", err);
     }
   }
 }
@@ -79,27 +47,12 @@ impl From<!> for EspError {
   }
 }
 
-impl From<esp_err_t> for EspError {
-  fn from(code: esp_err_t) -> Self {
-    EspError { code }
-  }
-}
-
 impl core::fmt::Display for EspError {
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
     unsafe {
-      let mut name = esp_err_to_name(self.code);
-
-      while !name.is_null() {
-        let c = core::char::from_u32_unchecked(*name as u32);
-
-        if c == '\0' { break }
-        f.write_char(c)?;
-        name = name.add(1);
-      }
+      let s = CStr::from_ptr(esp_err_to_name(self.code));
+      str::from_utf8_unchecked(s.to_bytes()).fmt(f)
     }
-
-    Ok(())
   }
 }
 
@@ -135,11 +88,8 @@ impl From<MacAddrType> for MacAddr6 {
     };
 
     let mut mac_address = MaybeUninit::<Self>::uninit();
-    unsafe {
-      let err = esp_read_mac(mac_address.as_mut_ptr() as *mut _, mac_address_type);
-      debug_assert_eq!(err, ESP_OK as _);
-      mac_address.assume_init()
-    }
+    assert_esp_ok!(esp_read_mac(mac_address.as_mut_ptr() as *mut _, mac_address_type));
+    unsafe { mac_address.assume_init() }
   }
 }
 
