@@ -48,7 +48,12 @@ SERIAL_PORT="$(find /dev -name 'tty.usbserial-*' 2>/dev/null | head -n 1 || true
 
 TARGET="xtensa-${CHIP}-none-elf"
 
-IDF_PATH="$(pwd)/esp-idf"
+if [[ "${CHIP}" == esp32 ]]; then
+  IDF_PATH="$(pwd)/esp-idf"
+else
+  IDF_PATH="$(pwd)/ESP8266_RTOS_SDK"
+fi
+
 export IDF_PATH
 
 IDF_TOOLS_PATH="$(pwd)/target/esp-idf-tools"
