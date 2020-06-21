@@ -1,4 +1,4 @@
-use std::{env, error::Error, fs::{remove_file, File}, io::stderr, os::unix::{fs::symlink, io::{FromRawFd, AsRawFd}}, path::PathBuf, process::{Command, Stdio}};
+use std::{env, error::Error, fs::{remove_file, File}, io::stderr, os::unix::{fs::symlink, io::{FromRawFd, AsRawFd}}, path::PathBuf, process::Command};
 
 fn main() -> Result<(), Box<dyn Error>> {
   println!("cargo:rerun-if-changed=Makefile");
@@ -29,8 +29,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     .arg("-j")
     .arg("bootloader")
     .env("VERBOSE", "1")
-    .stdout(Stdio::from(stderr.try_clone()?))
-    .stderr(Stdio::from(stderr.try_clone()?))
+    .stdout(stderr.try_clone()?)
+    .stderr(stderr.try_clone()?)
     .status()?;
 
   assert!(status.success());
@@ -39,8 +39,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     .arg("-j")
     .arg("app")
     .env("VERBOSE", "1")
-    .stdout(Stdio::from(stderr.try_clone()?))
-    .stderr(Stdio::from(stderr.try_clone()?))
+    .stdout(stderr.try_clone()?)
+    .stderr(stderr.try_clone()?)
     .status()?;
 
   assert!(status.success());
