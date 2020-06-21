@@ -48,8 +48,6 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
 
     println!("AP started.");
 
-    // esp32_hal::wifi::wifi_scan(true, false, 1000)?;
-
     let namespace = nvs.open("wifi")?;
     println!("namespace: {:?}", namespace);
 
