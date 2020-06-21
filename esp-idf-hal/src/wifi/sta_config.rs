@@ -6,7 +6,6 @@ use esp_idf_bindgen::{
   wifi_scan_method_t,
   wifi_sort_method_t,
   wifi_scan_threshold_t,
-  wifi_pmf_config_t,
 };
 
 use super::{AuthMode, Ssid, Password};
@@ -120,7 +119,8 @@ impl From<&StaConfig> for wifi_config_t {
         listen_interval: sta_config.listen_interval.unwrap_or(0),
         sort_method: sta_config.sort_method.into(),
         threshold: sta_config.threshold.unwrap_or_default().into(),
-        pmf_cfg: wifi_pmf_config_t {
+        #[cfg(target_device = "esp32")]
+        pmf_cfg: esp_idf_bindgen::wifi_pmf_config_t {
           capable: false,
           required: false,
         },

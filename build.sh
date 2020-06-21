@@ -70,7 +70,7 @@ if [[ -z "${SERIAL_PORT}" ]]; then
 fi
 
 esptool() {
-  esptool.py --chip "${CHIP}" --port "${SERIAL_PORT}" ${FLASH_BAUDRATE:+--baud "${FLASH_BAUDRATE}"} "${@}" | \
+  "${IDF_PATH}/components/esptool_py/esptool/esptool.py" --chip "${CHIP}" --port "${SERIAL_PORT}" ${FLASH_BAUDRATE:+--baud "${FLASH_BAUDRATE}"} "${@}" | \
     grep -E -v 'esptool.py|Serial port|Changing baud rate|Changed.|Uploading stub|Running stub|Stub running|Configuring flash size|Leaving'
 }
 

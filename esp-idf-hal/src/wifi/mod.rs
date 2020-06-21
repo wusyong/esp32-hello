@@ -167,6 +167,7 @@ pub enum AuthMode {
   WpaPsk,
   WpaWpa2Psk,
   Wpa2Psk,
+  #[cfg(target_device = "esp32")]
   Wpa3Psk,
   Wpa2Enterprise,
   Max,
@@ -180,6 +181,7 @@ impl From<wifi_auth_mode_t> for AuthMode {
       wifi_auth_mode_t::WIFI_AUTH_WPA_PSK => AuthMode::WpaPsk,
       wifi_auth_mode_t::WIFI_AUTH_WPA_WPA2_PSK => AuthMode::WpaWpa2Psk,
       wifi_auth_mode_t::WIFI_AUTH_WPA2_PSK => AuthMode::Wpa2Psk,
+      #[cfg(target_device = "esp32")]
       wifi_auth_mode_t::WIFI_AUTH_WPA3_PSK => AuthMode::Wpa3Psk,
       wifi_auth_mode_t::WIFI_AUTH_WPA2_ENTERPRISE => AuthMode::Wpa2Enterprise,
       wifi_auth_mode_t::WIFI_AUTH_MAX => AuthMode::Max,
@@ -195,6 +197,7 @@ impl From<AuthMode> for wifi_auth_mode_t {
       AuthMode::WpaPsk => wifi_auth_mode_t::WIFI_AUTH_WPA_PSK,
       AuthMode::WpaWpa2Psk => wifi_auth_mode_t::WIFI_AUTH_WPA_WPA2_PSK,
       AuthMode::Wpa2Psk => wifi_auth_mode_t::WIFI_AUTH_WPA2_PSK,
+      #[cfg(target_device = "esp32")]
       AuthMode::Wpa3Psk => wifi_auth_mode_t::WIFI_AUTH_WPA3_PSK,
       AuthMode::Wpa2Enterprise => wifi_auth_mode_t::WIFI_AUTH_WPA2_ENTERPRISE,
       AuthMode::Max => wifi_auth_mode_t::WIFI_AUTH_MAX,
@@ -209,12 +212,19 @@ pub struct Wifi<T = ()> {
 
 impl Wifi {
   pub fn init(_nvs: &mut NonVolatileStorage) -> Result<Wifi<()>, EspError> {
+    #[cfg(target_device = "esp8266")]
+    unsafe { tcpip_adapter_init() };
+
+    #[cfg(target_device = "esp32")]
     esp_ok!(esp_netif_init())?;
 
     esp_ok!(esp_event_loop_create_default())?;
 
-    unsafe { esp_netif_create_default_wifi_ap() };
-    unsafe { esp_netif_create_default_wifi_sta() };
+    #[cfg(target_device = "esp32")]
+    unsafe {
+      esp_netif_create_default_wifi_ap();
+      esp_netif_create_default_wifi_sta();
+    }
 
     let config = wifi_init_config_t::default();
     esp_ok!(esp_wifi_init(&config))?;

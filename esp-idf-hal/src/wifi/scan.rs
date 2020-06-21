@@ -8,9 +8,6 @@ use std::time::Duration;
 
 use esp_idf_bindgen::{
   libc,
-  esp_event_base_t,
-  esp_event_handler_register,
-  esp_event_handler_unregister,
   esp_wifi_scan_start,
   esp_wifi_scan_get_ap_num,
   esp_wifi_scan_get_ap_records,
@@ -18,8 +15,6 @@ use esp_idf_bindgen::{
   esp_wifi_start,
   esp_wifi_stop,
   wifi_ap_record_t,
-  wifi_event_t,
-  WIFI_EVENT,
   wifi_mode_t,
   wifi_scan_config_t,
   wifi_scan_time_t,
@@ -181,12 +176,14 @@ impl ScanFuture {
             min: duration_as_millis_rounded(min),
             max: duration_as_millis_rounded(max),
           },
+          #[cfg(target_device = "esp32")]
           passive: 0,
         },
       ),
       ScanType::Passive { max } => (
         wifi_scan_type_t::WIFI_SCAN_TYPE_PASSIVE,
         wifi_scan_time_t {
+          #[cfg(target_device = "esp32")]
           active: wifi_active_scan_time_t { min: 0, max: 0 },
           passive: duration_as_millis_rounded(max),
         },
@@ -268,6 +265,23 @@ fn get_ap_records() -> Result<Vec<ApRecord>, EspError> {
   }).collect())
 }
 
+
+#[cfg(target_device = "esp8266")]
+fn register_scan_done_handler(b: *mut ScanFutureState) -> Result<(), EspError> {
+  Ok(())
+}
+
+
+#[cfg(target_device = "esp8266")]
+#[inline]
+fn unregister_scan_done_handler() -> Result<(), EspError> {
+  Ok(())
+}
+
+#[cfg(target_device = "esp32")]
+use esp_idf_bindgen::{esp_event_handler_register, esp_event_handler_unregister, wifi_event_t, WIFI_EVENT};
+
+#[cfg(target_device = "esp32")]
 #[inline]
 fn register_scan_done_handler(b: *mut ScanFutureState) -> Result<(), EspError> {
   esp_ok!(esp_event_handler_register(
@@ -275,6 +289,7 @@ fn register_scan_done_handler(b: *mut ScanFutureState) -> Result<(), EspError> {
   ))
 }
 
+#[cfg(target_device = "esp32")]
 #[inline]
 fn unregister_scan_done_handler() -> Result<(), EspError> {
   esp_ok!(esp_event_handler_unregister(
@@ -285,7 +300,7 @@ fn unregister_scan_done_handler() -> Result<(), EspError> {
 #[cfg(target_device = "esp32")]
 extern "C" fn wifi_scan_done_handler(
   event_handler_arg: *mut libc::c_void,
-  _event_base: esp_event_base_t,
+  _event_base: esp_idf_bindgen::esp_event_base_t,
   _event_id: i32,
   _event_data: *mut libc::c_void,
 ) {
