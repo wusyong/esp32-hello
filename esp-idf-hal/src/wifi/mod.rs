@@ -1,5 +1,5 @@
 use core::mem::transmute;
-use core::str::Utf8Error;
+use core::str::{self, Utf8Error};
 use core::ptr;
 use std::mem::{self, MaybeUninit};
 use core::task::{Poll, Context, Waker};
@@ -10,7 +10,7 @@ use alloc::boxed::Box;
 use core::fmt;
 use macaddr::MacAddr6;
 
-use crate::{EspError, esp_ok, nvs::NonVolatileStorage, netif::IpInfo};
+use crate::{EspError, esp_ok, nvs::NonVolatileStorage, interface::IpInfo};
 
 use esp_idf_bindgen::*;
 
@@ -52,7 +52,7 @@ pub struct Ssid {
 
 impl Ssid {
   pub fn as_str(&self) -> &str {
-    &unsafe { core::str::from_utf8_unchecked(&self.ssid[..self.ssid_len]) }
+    &unsafe { str::from_utf8_unchecked(&self.ssid[..self.ssid_len]) }
   }
 
   pub fn from_bytes(bytes: &[u8]) -> Result<Ssid, WifiConfigError> {
@@ -62,7 +62,7 @@ impl Ssid {
       return Err(WifiConfigError::TooLong(SSID_MAX_LEN, ssid_len))
     }
 
-    if let Err(utf8_error) = core::str::from_utf8(bytes) {
+    if let Err(utf8_error) = str::from_utf8(bytes) {
       return Err(WifiConfigError::Utf8Error(utf8_error))
     }
 
@@ -105,7 +105,7 @@ pub struct Password {
 
 impl Password {
   pub fn as_str(&self) -> &str {
-    &unsafe { core::str::from_utf8_unchecked(&self.password[..self.password_len]) }
+    &unsafe { str::from_utf8_unchecked(&self.password[..self.password_len]) }
   }
 
   pub fn from_bytes(bytes: &[u8]) -> Result<Password, WifiConfigError> {
@@ -115,7 +115,7 @@ impl Password {
       return Err(WifiConfigError::TooLong(PASSWORD_MAX_LEN, ssid_len))
     }
 
-    if let Err(utf8_error) = core::str::from_utf8(bytes) {
+    if let Err(utf8_error) = str::from_utf8(bytes) {
       return Err(WifiConfigError::Utf8Error(utf8_error))
     }
 
@@ -220,14 +220,14 @@ impl Wifi {
 
     esp_ok!(esp_event_loop_create_default())?;
 
+    let config = wifi_init_config_t::default();
+    esp_ok!(esp_wifi_init(&config))?;
+
     #[cfg(target_device = "esp32")]
     unsafe {
       esp_netif_create_default_wifi_ap();
       esp_netif_create_default_wifi_sta();
     }
-
-    let config = wifi_init_config_t::default();
-    esp_ok!(esp_wifi_init(&config))?;
 
     Ok(Wifi { config: () })
   }

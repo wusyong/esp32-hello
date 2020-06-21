@@ -1,19 +1,16 @@
 #![feature(never_type)]
 #![warn(missing_debug_implementations)]
 
-use core::mem::MaybeUninit;
 use std::ffi::CStr;
-use core::str;
+use std::str;
 
 #[macro_use]
 extern crate alloc;
 
-use macaddr::{MacAddr, MacAddr6};
-
-use esp_idf_bindgen::{esp_err_t, esp_mac_type_t, esp_err_to_name, esp_read_mac};
+use esp_idf_bindgen::{esp_err_t, esp_err_to_name};
 
 pub mod ets;
-pub mod netif;
+pub mod interface;
 pub mod wifi;
 pub mod nvs;
 
@@ -53,55 +50,5 @@ impl core::fmt::Display for EspError {
       let s = CStr::from_ptr(esp_err_to_name(self.code));
       str::from_utf8_unchecked(s.to_bytes()).fmt(f)
     }
-  }
-}
-
-/// Enumeration of all available interfaces.
-#[derive(Debug, Clone, Copy)]
-pub enum Interface {
-  /// WiFi interface in station mode.
-  Sta,
-  /// WiFi interface in access point mode.
-  Ap,
-  #[cfg(not(target_device = "esp8266"))]
-  /// Bluetooth interface.
-  Bt,
-  /// Ethernet interface.
-  #[cfg(not(target_device = "esp8266"))]
-  Eth,
-}
-
-/// ```no_run
-/// use macaddr::MacAddr6;
-/// use esp32_hal::Interface;
-///
-/// MacAddr6::from(Interface::Ap)
-/// ```
-impl From<Interface> for MacAddr6 {
-  fn from(interface: Interface) -> Self {
-    let mac_address_type = match interface {
-      Interface::Sta => esp_mac_type_t::ESP_MAC_WIFI_STA,
-      Interface::Ap  => esp_mac_type_t::ESP_MAC_WIFI_SOFTAP,
-      #[cfg(not(target_device = "esp8266"))]
-      Interface::Bt  => esp_mac_type_t::ESP_MAC_BT,
-      #[cfg(not(target_device = "esp8266"))]
-      Interface::Eth => esp_mac_type_t::ESP_MAC_ETH,
-    };
-
-    let mut mac_address = MaybeUninit::<Self>::uninit();
-    assert_esp_ok!(esp_read_mac(mac_address.as_mut_ptr() as *mut _, mac_address_type));
-    unsafe { mac_address.assume_init() }
-  }
-}
-
-/// ```no_run
-/// use macaddr::MacAddr;
-/// use esp32_hal::Interface;
-///
-/// MacAddr::from(Interface::Ap)
-/// ```
-impl From<Interface> for MacAddr {
-  fn from(interface: Interface) -> Self {
-    Self::V6(interface.into())
   }
 }

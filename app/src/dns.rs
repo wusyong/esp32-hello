@@ -3,7 +3,7 @@ use std::net::{Ipv4Addr, UdpSocket};
 use std::mem::{size_of, MaybeUninit};
 use std::thread;
 
-use esp_idf_hal::netif::IpInfo;
+use esp_idf_hal::interface::{IpInfo};
 
 use dnsparse::*;
 
