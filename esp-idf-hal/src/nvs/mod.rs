@@ -1,6 +1,7 @@
 use core::ptr;
 use core::mem::MaybeUninit;
 
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::ffi::CString;
 
 use esp_idf_bindgen::{
@@ -51,6 +52,8 @@ impl Drop for NameSpace {
   }
 }
 
+static DEFAULT_INSTANCES: AtomicUsize = AtomicUsize::new(0);
+
 impl NonVolatileStorage {
   pub fn open(&mut self, name: &str) -> Result<NameSpace, EspError> {
     let name = CString::new(name).map_err(|_| EspError { code: ESP_ERR_NVS_NOT_FOUND as esp_err_t })?;
@@ -67,27 +70,68 @@ impl NonVolatileStorage {
     Ok(NameSpace { handle: unsafe { handle.assume_init() } })
   }
 
-  fn init(&mut self) -> Result<(), EspError> {
-    match esp_ok!(nvs_flash_init_partition(self.partition_name.as_ptr())) {
-      Err(err) if err.code == ESP_ERR_NVS_NO_FREE_PAGES as esp_err_t || err.code == ESP_ERR_NVS_NEW_VERSION_FOUND as esp_err_t => {
-        esp_ok!(nvs_flash_erase_partition(self.partition_name.as_ptr()))?;
-        esp_ok!(nvs_flash_init_partition(self.partition_name.as_ptr()))
+  fn init(partition_name: &CStr) -> Result<(), EspError> {
+    esp_ok!(nvs_flash_init_partition(partition_name.as_ptr()))
+  }
+
+  pub(crate) fn init_default() {
+    loop {
+      match DEFAULT_INSTANCES.compare_and_swap(0, 1, Ordering::SeqCst) {
+        0 => {
+          match esp_ok!(nvs_flash_init_partition(NVS_DEFAULT_PART_NAME.as_ptr() as *const _)) {
+            Err(err) if err.code == ESP_ERR_NVS_NO_FREE_PAGES as esp_err_t || err.code == ESP_ERR_NVS_NEW_VERSION_FOUND as esp_err_t => {
+              assert_esp_ok!(nvs_flash_erase_partition(NVS_DEFAULT_PART_NAME.as_ptr() as *const _));
+              assert_esp_ok!(nvs_flash_init_partition(NVS_DEFAULT_PART_NAME.as_ptr() as *const _));
+            }
+            Err(err) => assert_esp_ok!(err.code),
+            Ok(()) => (),
+          }
+          DEFAULT_INSTANCES.fetch_add(1, Ordering::SeqCst);
+          return;
+        },
+        1 => continue,
+        _ => {
+          DEFAULT_INSTANCES.fetch_add(1, Ordering::SeqCst);
+          return
+        },
       }
-      res => res,
+    }
+  }
+
+  pub(crate) fn deinit_default() {
+    loop {
+      match DEFAULT_INSTANCES.compare_and_swap(2, 1, Ordering::SeqCst) {
+        2 => {
+          unsafe { nvs_flash_deinit_partition(NVS_DEFAULT_PART_NAME.as_ptr() as *const _) };
+          DEFAULT_INSTANCES.fetch_sub(1, Ordering::SeqCst);
+          return;
+        },
+        1 => continue,
+        _ => {
+          DEFAULT_INSTANCES.fetch_sub(1, Ordering::SeqCst);
+          return
+        },
+      }
     }
   }
 }
 
 impl Default for NonVolatileStorage {
   fn default() -> Self {
-    let mut nvs = Self { partition_name: unsafe { CString::from_vec_unchecked(NVS_DEFAULT_PART_NAME.to_vec()) } };
-    nvs.init().expect("failed to initialize default NVS partition");
+    let mut default_partition = NVS_DEFAULT_PART_NAME.to_vec();
+    default_partition.pop();
+    let mut nvs = Self { partition_name: unsafe { CString::from_vec_unchecked(default_partition) } };
+    Self::init_default();
     nvs
   }
 }
 
 impl Drop for NonVolatileStorage {
   fn drop(&mut self) {
-    unsafe { nvs_flash_deinit_partition(self.partition_name.as_ptr()) };
+    if self.partition_name.as_bytes_with_nul() == NVS_DEFAULT_PART_NAME {
+      Self::deinit_default();
+    } else {
+      unsafe { nvs_flash_deinit_partition(self.partition_name.as_ptr()) };
+    }
   }
 }
