@@ -61,7 +61,10 @@ pub async fn handle_request(
   let mut buf: [u8; 1024] = [0; 1024];
   let len = match client.read(&mut buf) {
     Ok(len) => len,
-    Err(_) => return wifi_running,
+    Err(err) => {
+      eprintln!("Error reading from client: {:?}", err);
+      return wifi_running
+    },
   };
 
   let mut headers = [httparse::EMPTY_HEADER; 16];

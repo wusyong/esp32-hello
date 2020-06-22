@@ -109,6 +109,8 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
         let stream = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 80)).expect("failed starting TCP listener");
 
         loop {
+          thread::yield_now();
+
           match stream.accept() {
             Ok((client, addr)) => {
               wifi_running = handle_request(client, addr, &mut wifi_storage, wifi_running).await;
@@ -116,8 +118,6 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => (),
             Err(e) => eprintln!("couldn't get client: {:?}", e),
           }
-
-          thread::yield_now();
         }
       }))
       .unwrap();
