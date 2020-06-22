@@ -9,8 +9,7 @@ use esp_idf_hal::{nvs::*, wifi::*};
 #[no_mangle]
 fn app_main() {
   block_on(async {
-    let mut nvs = NonVolatileStorage::default();
-    let mut wifi = Wifi::init(&mut nvs).unwrap();
+    let mut wifi = Wifi::take().unwrap();
 
     let scan_config = ScanConfig::builder()
       .show_hidden(true)

@@ -2,6 +2,7 @@ use core::mem::transmute;
 use core::str::{self, Utf8Error};
 use core::ptr;
 use std::mem::{self, MaybeUninit};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use core::task::{Poll, Context, Waker};
 use core::pin::Pin;
 
@@ -10,7 +11,7 @@ use alloc::boxed::Box;
 use core::fmt;
 use macaddr::MacAddr6;
 
-use crate::{EspError, esp_ok, nvs::NonVolatileStorage, interface::{Interface, IpInfo}};
+use crate::{EspError, assert_esp_ok, esp_ok, nvs::NonVolatileStorage, interface::{Interface, IpInfo}};
 
 use esp_idf_bindgen::*;
 
@@ -208,38 +209,86 @@ impl From<AuthMode> for wifi_auth_mode_t {
 #[derive(Debug)]
 pub struct Wifi<T = ()> {
   config: T,
+  deinit_on_drop: bool,
 }
 
+fn netif_init() {
+  static NETIF_STATE: AtomicU8 = AtomicU8::new(0);
+
+  loop {
+    match NETIF_STATE.compare_and_swap(0, 1, Ordering::SeqCst) {
+      0 => {
+        assert_esp_ok!(esp_netif_init());
+        NETIF_STATE.store(2, Ordering::SeqCst);
+        return;
+      },
+      1 => continue,
+      _ => return,
+    }
+  }
+}
+
+fn event_loop_create_default() {
+  static EVENT_LOOP_STATE: AtomicU8 = AtomicU8::new(0);
+
+  loop {
+    match EVENT_LOOP_STATE.compare_and_swap(0, 1, Ordering::SeqCst) {
+      0 => {
+        assert_esp_ok!(esp_event_loop_create_default());
+        EVENT_LOOP_STATE.store(2, Ordering::SeqCst);
+        return;
+      },
+      1 => continue,
+      _ => return,
+    }
+  }
+}
+
+static WIFI_ACTIVE: AtomicBool = AtomicBool::new(false);
+
+
 impl Wifi {
-  pub fn init(_nvs: &mut NonVolatileStorage) -> Result<Wifi<()>, EspError> {
-    #[cfg(target_device = "esp8266")]
-    unsafe { tcpip_adapter_init() };
+  pub fn take() -> Option<Wifi<()>> {
+    if WIFI_ACTIVE.compare_and_swap(false, true, Ordering::SeqCst) {
+      None
+    } else {
+      #[cfg(target_device = "esp8266")]
+      unsafe { tcpip_adapter_init() };
 
-    #[cfg(target_device = "esp32")]
-    esp_ok!(esp_netif_init())?;
+      #[cfg(target_device = "esp32")]
+      netif_init();
 
-    esp_ok!(esp_event_loop_create_default())?;
+      event_loop_create_default();
 
-    let config = wifi_init_config_t::default();
-    esp_ok!(esp_wifi_init(&config))?;
+      NonVolatileStorage::init_default();
+      let config = wifi_init_config_t::default();
+      assert_esp_ok!(esp_wifi_init(&config));
 
-    Ok(Wifi { config: () })
+      Some(Wifi { config: (), deinit_on_drop: true })
+    }
   }
 
+  /// Scan nearby WiFi networks using the specified `ScanConfig`.
   pub fn scan(&mut self, scan_config: &ScanConfig) -> ScanFuture {
     ScanFuture::new(scan_config)
   }
 
-  pub fn start_ap(self, config: ApConfig) -> Result<WifiRunning, WifiError> {
+  /// Start an access point using the specified `ApConfig`.
+  pub fn start_ap(mut self, config: ApConfig) -> Result<WifiRunning, WifiError> {
+    self.deinit_on_drop = false;
+
     Interface::Ap.init();
     let mut ap_config = wifi_config_t::from(&config);
     esp_ok!(esp_wifi_set_mode(wifi_mode_t::WIFI_MODE_AP))?;
     esp_ok!(esp_wifi_set_config(esp_interface_t::ESP_IF_WIFI_AP, &mut ap_config))?;
     esp_ok!(esp_wifi_start())?;
-    Ok(WifiRunning::Ap(Wifi { config }))
+    Ok(WifiRunning::Ap(Wifi { config, deinit_on_drop: true }))
   }
 
-  pub fn connect_sta(self, config: StaConfig) -> ConnectFuture {
+  /// Connect to a WiFi network using the specified `StaConfig`.
+  pub fn connect_sta(mut self, config: StaConfig) -> ConnectFuture {
+    self.deinit_on_drop = false;
+
     Interface::Sta.init();
     let mut sta_config = wifi_config_t::from(&config);
 
@@ -271,27 +320,36 @@ impl<T> Wifi<T> {
 
 impl<T> Drop for Wifi<T> {
   fn drop(&mut self) {
-    if mem::size_of::<T>() != 0 {
-      unsafe { esp_wifi_stop() };
+    if self.deinit_on_drop {
+      if mem::size_of::<T>() != 0 {
+        unsafe { esp_wifi_stop() };
+      }
+
+      let _ = esp_ok!(esp_wifi_deinit());
+      NonVolatileStorage::deinit_default();
+
+      WIFI_ACTIVE.store(false, Ordering::SeqCst);
     }
   }
 }
 
 impl Wifi<StaConfig> {
   pub fn stop(mut self) -> (StaConfig, Wifi<()>) {
+    self.deinit_on_drop = false;
+    assert_esp_ok!(esp_wifi_stop());
     let config = MaybeUninit::uninit();
     let config = mem::replace(&mut self.config, unsafe { config.assume_init() });
-    mem::forget(self);
-    (config, Wifi { config: () })
+    (config, Wifi { config: (), deinit_on_drop: true })
   }
 }
 
 impl Wifi<ApConfig> {
   pub fn stop(mut self) -> (ApConfig, Wifi<()>) {
+    self.deinit_on_drop = false;
+    assert_esp_ok!(esp_wifi_stop());
     let config = MaybeUninit::uninit();
     let config = mem::replace(&mut self.config, unsafe { config.assume_init() });
-    mem::forget(self);
-    (config, Wifi { config: () })
+    (config, Wifi { config: (), deinit_on_drop: true })
   }
 }
 
@@ -319,7 +377,7 @@ pub enum WifiError {
 
 impl WifiError {
   pub fn wifi(self) -> Wifi<()> {
-    Wifi { config: () }
+    Wifi { config: (), deinit_on_drop: true }
   }
 }
 
@@ -399,8 +457,6 @@ impl core::future::Future for ConnectFuture {
           }
         }
 
-
-
         match self.state {
           ConnectFutureState::Starting | ConnectFutureState::ConnectedWithoutIp { .. } => unreachable!(),
           ConnectFutureState::Failed(ref err) => {
@@ -410,7 +466,7 @@ impl core::future::Future for ConnectFuture {
           ConnectFutureState::Connected { ref mut ip_info, .. } => {
             let ip_info = mem::replace(ip_info, unsafe { MaybeUninit::uninit().assume_init() });
             let config = mem::replace(&mut self.as_mut().config, unsafe { MaybeUninit::uninit().assume_init() });
-            Poll::Ready(Ok(WifiRunning::Sta(Wifi { config }, ip_info)))
+            Poll::Ready(Ok(WifiRunning::Sta(Wifi { config, deinit_on_drop: true }, ip_info)))
           }
         }
       }

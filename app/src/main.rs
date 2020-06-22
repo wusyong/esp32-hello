@@ -44,7 +44,7 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
 
     let mut nvs = NonVolatileStorage::default();
 
-    let wifi = Wifi::init(&mut nvs)?;
+    let wifi = Wifi::take().unwrap();
 
     println!("AP started.");
 
