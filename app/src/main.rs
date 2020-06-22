@@ -108,15 +108,34 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
 
         let stream = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 80)).expect("failed starting TCP listener");
 
+        use std::sync::{Arc, Mutex};
+
+        let mut wifi_running = Arc::new(Mutex::new(Some(wifi_running)));
+        let mut wifi_storage = Arc::new(Mutex::new(wifi_storage));
+
         loop {
           thread::yield_now();
 
-          match stream.accept() {
-            Ok((client, addr)) => {
-              wifi_running = handle_request(client, addr, &mut wifi_storage, wifi_running).await;
+          let client = stream.accept().and_then(|(client, addr)| {
+            client.set_read_timeout(Some(Duration::from_secs(30)))?;
+            client.set_write_timeout(Some(Duration::from_secs(30)))?;
+            Ok((client, addr))
+          });
+
+          match client {
+            Ok((mut client, addr)) => {
+              let wifi_storage = Arc::clone(&wifi_storage);
+              let wifi_running = Arc::clone(&wifi_running);
+
+              thread::Builder::new()
+                .stack_size(8192)
+                .spawn(move || block_on(async {
+                  handle_request(client, addr, wifi_storage, wifi_running).await
+                }))
+                .unwrap();
             },
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => (),
-            Err(e) => eprintln!("couldn't get client: {:?}", e),
+            Err(e) => eprintln!("Client error: {}", e),
           }
         }
       }))

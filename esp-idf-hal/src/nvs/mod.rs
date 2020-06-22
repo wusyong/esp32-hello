@@ -82,7 +82,7 @@ impl NonVolatileStorage {
             Err(err) if err.code == ESP_ERR_NVS_NO_FREE_PAGES as esp_err_t || err.code == ESP_ERR_NVS_NEW_VERSION_FOUND as esp_err_t => {
               assert_esp_ok!(nvs_flash_erase_partition(NVS_DEFAULT_PART_NAME.as_ptr() as *const _));
               assert_esp_ok!(nvs_flash_init_partition(NVS_DEFAULT_PART_NAME.as_ptr() as *const _));
-            }
+            },
             Err(err) => assert_esp_ok!(err.code),
             Ok(()) => (),
           }

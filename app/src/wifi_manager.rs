@@ -1,5 +1,7 @@
 use std::io::{self, Read, Write};
 use std::net::{SocketAddr, TcpStream};
+use std::sync::{Arc, Mutex};
+use std::str;
 
 use esp_idf_hal::{nvs::NameSpace, wifi::*};
 
@@ -27,7 +29,7 @@ fn handle_index(mut client: TcpStream) -> io::Result<()> {
 
 fn handle_hotspot_detect(mut client: TcpStream) -> io::Result<()> {
   writeln!(client, "HTTP/1.1 303 See Other")?;
-  writeln!(client, "Location: http://192.168.4.1/")?;
+  writeln!(client, "Location: /")?;
   writeln!(client, "Content-Type: text/plain")?;
   writeln!(client)?;
   writeln!(client, "Redirecting …")
@@ -35,7 +37,7 @@ fn handle_hotspot_detect(mut client: TcpStream) -> io::Result<()> {
 
 fn handle_connecting(mut client: TcpStream) -> io::Result<()> {
   writeln!(client, "HTTP/1.1 303 See Other")?;
-  writeln!(client, "Location: http://192.168.4.1/")?;
+  writeln!(client, "Location: /")?;
   writeln!(client, "Content-Type: text/plain")?;
   writeln!(client)?;
   writeln!(client, "Connecting …")
@@ -53,9 +55,9 @@ fn handle_internal_error(mut client: TcpStream) -> io::Result<()> {
 
 pub async fn handle_request(
   mut client: TcpStream, addr: SocketAddr,
-  wifi_storage: &mut NameSpace,
-  mut wifi_running: WifiRunning,
-) -> WifiRunning {
+  wifi_storage: Arc<Mutex<NameSpace>>,
+  mut wifi_running: Arc<Mutex<Option<WifiRunning>>>,
+) {
   println!("Handling request from {} …", addr);
 
   let mut buf: [u8; 1024] = [0; 1024];
@@ -63,7 +65,8 @@ pub async fn handle_request(
     Ok(len) => len,
     Err(err) => {
       eprintln!("Error reading from client: {:?}", err);
-      return wifi_running
+      handle_internal_error(client);
+      return;
     },
   };
 
@@ -72,43 +75,53 @@ pub async fn handle_request(
 
   let status = req.parse(&buf);
 
-  println!("Status: {:?}", status);
-  println!("Request: {:?}", req);
+  let mut host = None;
 
-  let res = if let Ok(httparse::Status::Complete(header_len)) = status {
-    match req.path {
-      Some("/") => handle_index(client),
-      Some("/hotspot-detect.html") => handle_hotspot_detect(client),
-      Some("/connect") => {
-        let res = handle_connecting(client);
+  for header in req.headers {
+    if header.name == "Host" {
+      host = Some(str::from_utf8(header.value).unwrap_or(""));
+    }
+  }
 
-        if req.method == Some("POST") {
-          let body = &buf[header_len..len];
+  let res = match (status, req.method, req.path) {
+    (Ok(httparse::Status::Complete(header_len)), Some(method), Some(path)) => {
+      println!("{} {} - {} bytes", method, path, len);
 
-          if let (Some(ssid), Some(password)) = ssid_and_password(body) {
-            wifi_storage.set::<&str>("ssid", &ssid.as_str()).expect("Failed saving SSID");
-            wifi_storage.set::<&str>("password", &password.as_str()).expect("Failed saving password");
+      match (method, path) {
+        ("GET", "/") => handle_index(client),
+        ("GET", "/hotspot-detect.html") => handle_hotspot_detect(client),
+        ("POST", "/connect") => {
+          let res = handle_connecting(client);
 
-            if let WifiRunning::Ap(ap) = wifi_running {
-              let (ap_config, wifi) = ap.stop();
-              wifi_running = connect_ssid_password(wifi, ap_config, ssid, password).await;
+          if req.method == Some("POST") {
+            let body = &buf[header_len..len];
+
+            if let (Some(ssid), Some(password)) = ssid_and_password(body) {
+              let mut wifi_storage = wifi_storage.lock().unwrap();
+
+              wifi_storage.set::<&str>("ssid", &ssid.as_str()).expect("Failed saving SSID");
+              wifi_storage.set::<&str>("password", &password.as_str()).expect("Failed saving password");
+
+              let mut wifi_running = wifi_running.lock().unwrap();
+
+              if let Some(WifiRunning::Ap(ap)) = wifi_running.take() {
+                let (ap_config, wifi) = ap.stop();
+                wifi_running.replace(connect_ssid_password(wifi, ap_config, ssid, password).await);
+              }
             }
           }
-        }
 
-        res
-      },
-      _ => handle_not_found(client),
+          res
+        },
+        _ => handle_not_found(client),
+      }
     }
-  } else {
-    handle_internal_error(client)
+    _ => handle_internal_error(client),
   };
 
   if let Err(err) = res {
     eprintln!("Error handling request: {}", err);
   }
-
-  wifi_running
 }
 
 pub async fn connect_ssid_password(wifi: Wifi<()>, ap_config: ApConfig, ssid: Ssid, password: Password) -> WifiRunning {
