@@ -1,10 +1,20 @@
 use std::mem::MaybeUninit;
 use std::net::Ipv4Addr;
+use std::sync::atomic::{AtomicUsize, AtomicPtr, Ordering};
+use std::ptr;
 
-use esp_idf_bindgen::{esp_mac_type_t, esp_read_mac};
+use esp_idf_bindgen::{esp_mac_type_t, esp_read_mac, esp_netif_t, esp_netif_create_default_wifi_ap, esp_netif_create_default_wifi_sta};
+#[cfg(target_device = "esp8266")]
+use esp_idf_bindgen::{tcpip_adapter_get_ip_info, tcpip_adapter_if_t, tcpip_adapter_ip_info_t as ip_info_t};
+#[cfg(target_device = "esp32")]
+use esp_idf_bindgen::{esp_netif_get_ip_info, esp_netif_get_handle_from_ifkey, esp_netif_ip_info_t as ip_info_t};
 use macaddr::{MacAddr, MacAddr6};
 
-use super::assert_esp_ok;
+use crate::assert_esp_ok;
+
+static AP_PTR: AtomicUsize = AtomicUsize::new(0);
+static STA_PTR: AtomicUsize = AtomicUsize::new(0);
+const INIT_SENTINEL: usize = usize::max_value();
 
 /// Enumeration of all available interfaces.
 #[derive(Debug, Clone, Copy)]
@@ -19,6 +29,66 @@ pub enum Interface {
   /// Ethernet interface.
   #[cfg(not(target_device = "esp8266"))]
   Eth,
+}
+
+impl Interface {
+  #[cfg(target_device = "esp8266")]
+  pub fn ip_info(&self) -> IpInfo {
+    let interface = match self {
+      Self::Ap => tcpip_adapter_if_t::TCPIP_ADAPTER_IF_AP,
+      Self::Sta => tcpip_adapter_if_t::TCPIP_ADAPTER_IF_STA,
+      Self::Eth => tcpip_adapter_if_t::TCPIP_ADAPTER_IF_ETH,
+      _ => unimplemented!(),
+    };
+
+    let mut ip_info = MaybeUninit::<ip_info_t>::uninit();
+    assert_esp_ok!(tcpip_adapter_get_ip_info(interface, ip_info.as_mut_ptr()));
+    unsafe { IpInfo::from_native_unchecked(ip_info.assume_init()) }
+  }
+
+
+  #[cfg(target_device = "esp32")]
+  pub fn ip_info(&self) -> IpInfo {
+    let mut ip_info = MaybeUninit::<ip_info_t>::uninit();
+    assert_esp_ok!(esp_netif_get_ip_info(self.ptr(), ip_info.as_mut_ptr()));
+    unsafe { IpInfo::from_native_unchecked(ip_info.assume_init()) }
+  }
+
+  fn ptr(&self) -> *mut esp_netif_t {
+    match self {
+      Self::Ap => {
+        loop {
+          match AP_PTR.compare_and_swap(0, INIT_SENTINEL, Ordering::SeqCst) {
+            0 => {
+              let ptr = unsafe { esp_netif_create_default_wifi_ap() };
+              AP_PTR.store(ptr as _, Ordering::SeqCst);
+              return ptr;
+            },
+            INIT_SENTINEL => continue,
+            ptr => return ptr as _,
+          }
+        }
+      },
+      Self::Sta => {
+        loop {
+          match STA_PTR.compare_and_swap(0, INIT_SENTINEL, Ordering::SeqCst) {
+            0 => {
+              let ptr = unsafe { esp_netif_create_default_wifi_sta() };
+              STA_PTR.store(ptr as _, Ordering::SeqCst);
+              return ptr;
+            },
+            INIT_SENTINEL => continue,
+            ptr => return ptr as _,
+          }
+        }
+      },
+      _ => ptr::null_mut()
+    }
+  }
+
+  pub(crate) fn init(&self) {
+    self.ptr();
+  }
 }
 
 /// ```no_run
@@ -77,33 +147,7 @@ impl IpInfo {
   }
 }
 
-#[cfg(target_device = "esp8266")]
-use esp_idf_bindgen::{tcpip_adapter_get_ip_info, tcpip_adapter_if_t, tcpip_adapter_ip_info_t as ip_info_t};
-
-#[cfg(target_device = "esp32")]
-use esp_idf_bindgen::{esp_netif_get_ip_info, esp_netif_get_handle_from_ifkey, esp_netif_ip_info_t as ip_info_t};
-
 impl IpInfo {
-  #[cfg(target_device = "esp8266")]
-  pub fn sta() -> Option<Self> {
-    Self::get_ip_info(tcpip_adapter_if_t::TCPIP_ADAPTER_IF_STA)
-  }
-
-  #[cfg(target_device = "esp32")]
-  pub fn sta() -> Option<Self> {
-    Self::get_ip_info(b"WIFI_STA_DEF\0")
-  }
-
-  #[cfg(target_device = "esp8266")]
-  pub fn ap() -> Option<Self> {
-    Self::get_ip_info(tcpip_adapter_if_t::TCPIP_ADAPTER_IF_AP)
-  }
-
-  #[cfg(target_device = "esp32")]
-  pub fn ap() -> Option<Self> {
-    Self::get_ip_info(b"WIFI_AP_DEF\0")
-  }
-
   pub(crate) unsafe fn from_native_unchecked(ip_info: ip_info_t) -> Self {
     IpInfo {
       ip: u32::from_be(ip_info.ip.addr).into(),
@@ -126,21 +170,5 @@ impl IpInfo {
     }
 
     Some(unsafe { Self::from_native_unchecked(ip_info) })
-  }
-
-  #[cfg(target_device = "esp8266")]
-  fn get_ip_info(interface: tcpip_adapter_if_t) -> Option<Self> {
-
-    let mut ip_info = MaybeUninit::<ip_info_t>::uninit();
-    assert_esp_ok!(tcpip_adapter_get_ip_info(interface, ip_info.as_mut_ptr()));
-    Self::from_native(unsafe { ip_info.assume_init() })
-  }
-
-  #[cfg(target_device = "esp32")]
-  fn get_ip_info(key: &[u8]) -> Option<Self> {
-    let mut ip_info = MaybeUninit::<ip_info_t>::uninit();
-    let interface = unsafe { esp_netif_get_handle_from_ifkey(key.as_ptr() as *const _) };
-    assert_esp_ok!(esp_netif_get_ip_info(interface, ip_info.as_mut_ptr()));
-    Self::from_native(unsafe { ip_info.assume_init() })
   }
 }

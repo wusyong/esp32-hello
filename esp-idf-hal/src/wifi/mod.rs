@@ -10,7 +10,7 @@ use alloc::boxed::Box;
 use core::fmt;
 use macaddr::MacAddr6;
 
-use crate::{EspError, esp_ok, nvs::NonVolatileStorage, interface::IpInfo};
+use crate::{EspError, esp_ok, nvs::NonVolatileStorage, interface::{Interface, IpInfo}};
 
 use esp_idf_bindgen::*;
 
@@ -223,12 +223,6 @@ impl Wifi {
     let config = wifi_init_config_t::default();
     esp_ok!(esp_wifi_init(&config))?;
 
-    #[cfg(target_device = "esp32")]
-    unsafe {
-      esp_netif_create_default_wifi_ap();
-      esp_netif_create_default_wifi_sta();
-    }
-
     Ok(Wifi { config: () })
   }
 
@@ -237,6 +231,7 @@ impl Wifi {
   }
 
   pub fn start_ap(self, config: ApConfig) -> Result<WifiRunning, WifiError> {
+    Interface::Ap.init();
     let mut ap_config = wifi_config_t::from(&config);
     esp_ok!(esp_wifi_set_mode(wifi_mode_t::WIFI_MODE_AP))?;
     esp_ok!(esp_wifi_set_config(esp_interface_t::ESP_IF_WIFI_AP, &mut ap_config))?;
@@ -245,6 +240,7 @@ impl Wifi {
   }
 
   pub fn connect_sta(self, config: StaConfig) -> ConnectFuture {
+    Interface::Sta.init();
     let mut sta_config = wifi_config_t::from(&config);
 
     let state = if let Err(err) = esp_ok!(esp_wifi_set_mode(wifi_mode_t::WIFI_MODE_STA)) {
@@ -448,8 +444,8 @@ extern "C" fn wifi_sta_handler(
         eprintln!("EVENT_DATA: {:?}", event);
 
         let ssid = Ssid { ssid: event.ssid, ssid_len: event.ssid_len as usize };
-        let channel = event.channel;
         let bssid = MacAddr6::from(event.bssid);
+        let channel = event.channel;
         let auth_mode = AuthMode::from(event.authmode);
 
         let (ref mut f, _) = unsafe { &mut *(event_handler_arg as *mut (Pin<&mut ConnectFuture>, &Waker)) };
@@ -462,6 +458,8 @@ extern "C" fn wifi_sta_handler(
 
         eprintln!("EVENT_DATA: {:?}", event);
 
+        let ssid = Ssid { ssid: event.ssid, ssid_len: event.ssid_len as usize };
+        let bssid = MacAddr6::from(event.bssid);
         let reason: wifi_err_reason_t = unsafe { transmute(event.reason as u32) };
 
         let (mut f, waker) = unsafe { *Box::from_raw(event_handler_arg as *mut (Pin<&mut ConnectFuture>, &Waker)) };

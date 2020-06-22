@@ -3,7 +3,7 @@ use std::net::{Ipv4Addr, UdpSocket};
 use std::mem::{size_of, MaybeUninit};
 use std::thread;
 
-use esp_idf_hal::interface::{IpInfo};
+use esp_idf_hal::interface::Interface;
 
 use dnsparse::*;
 
@@ -63,7 +63,7 @@ pub fn server() {
 
   let socket = UdpSocket::bind("0.0.0.0:53").unwrap();
 
-  let ip = *IpInfo::ap().unwrap().ip();
+  let ip = *Interface::Ap.ip_info().ip();
   println!("IP: {:?}", ip);
 
   'outer: loop {
