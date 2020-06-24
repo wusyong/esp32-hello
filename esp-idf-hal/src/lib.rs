@@ -11,6 +11,8 @@ use esp_idf_bindgen::{esp_err_t, esp_err_to_name};
 
 pub mod ets;
 pub mod interface;
+mod heap;
+pub use heap::Heap;
 pub mod wifi;
 pub mod nvs;
 
