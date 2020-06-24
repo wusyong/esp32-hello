@@ -1,4 +1,5 @@
 #![feature(never_type)]
+#![feature(const_cstr_unchecked)]
 #![warn(missing_debug_implementations)]
 
 use std::ffi::CStr;

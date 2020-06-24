@@ -52,6 +52,7 @@ impl Drop for NameSpace {
   }
 }
 
+const DEFAULT_PART_NAME: &'static CStr = unsafe { CStr::from_bytes_with_nul_unchecked(NVS_DEFAULT_PART_NAME) };
 static DEFAULT_INSTANCES: AtomicUsize = AtomicUsize::new(0);
 
 impl NonVolatileStorage {
@@ -74,18 +75,21 @@ impl NonVolatileStorage {
     esp_ok!(nvs_flash_init_partition(partition_name.as_ptr()))
   }
 
+  fn erase(partition_name: &CStr) -> Result<(), EspError> {
+    esp_ok!(nvs_flash_erase_partition(partition_name.as_ptr()))
+  }
+
   pub(crate) fn init_default() {
     loop {
       match DEFAULT_INSTANCES.compare_and_swap(0, 1, Ordering::SeqCst) {
         0 => {
-          match esp_ok!(nvs_flash_init_partition(NVS_DEFAULT_PART_NAME.as_ptr() as *const _)) {
+          match Self::init(DEFAULT_PART_NAME) {
             Err(err) if err.code == ESP_ERR_NVS_NO_FREE_PAGES as esp_err_t || err.code == ESP_ERR_NVS_NEW_VERSION_FOUND as esp_err_t => {
-              assert_esp_ok!(nvs_flash_erase_partition(NVS_DEFAULT_PART_NAME.as_ptr() as *const _));
-              assert_esp_ok!(nvs_flash_init_partition(NVS_DEFAULT_PART_NAME.as_ptr() as *const _));
+              Self::erase(DEFAULT_PART_NAME).expect("failed to erase default partition");
+              Self::init(DEFAULT_PART_NAME)
             },
-            Err(err) => assert_esp_ok!(err.code),
-            Ok(()) => (),
-          }
+            res => res,
+          }.expect("failed to initialize default partition");
           DEFAULT_INSTANCES.fetch_add(1, Ordering::SeqCst);
           return;
         },
@@ -118,9 +122,7 @@ impl NonVolatileStorage {
 
 impl Default for NonVolatileStorage {
   fn default() -> Self {
-    let mut default_partition = NVS_DEFAULT_PART_NAME.to_vec();
-    default_partition.pop();
-    let mut nvs = Self { partition_name: unsafe { CString::from_vec_unchecked(default_partition) } };
+    let nvs = Self { partition_name: DEFAULT_PART_NAME.to_owned() };
     Self::init_default();
     nvs
   }

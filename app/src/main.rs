@@ -92,12 +92,12 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
           .ssid(ap_ssid)
           .build();
 
-        let mut wifi_storage = namespace;
+        let wifi_storage = namespace;
 
         let ssid = wifi_storage.get::<String>("ssid").ok().and_then(|s| Ssid::from_bytes(s.as_bytes()).ok());
         let password = wifi_storage.get::<String>("password").ok().and_then(|s| Password::from_bytes(s.as_bytes()).ok());
 
-        let mut wifi_running;
+        let wifi_running;
 
         if let (Some(ssid), Some(password)) = (ssid, password) {
           wifi_running = wifi_manager::connect_ssid_password(wifi, ap_config, ssid, password).await;
@@ -110,8 +110,8 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
 
         use std::sync::{Arc, Mutex};
 
-        let mut wifi_running = Arc::new(Mutex::new(Some(wifi_running)));
-        let mut wifi_storage = Arc::new(Mutex::new(wifi_storage));
+        let wifi_running = Arc::new(Mutex::new(Some(wifi_running)));
+        let wifi_storage = Arc::new(Mutex::new(wifi_storage));
 
         loop {
           thread::yield_now();
@@ -123,7 +123,7 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
           });
 
           match client {
-            Ok((mut client, addr)) => {
+            Ok((client, addr)) => {
               let wifi_storage = Arc::clone(&wifi_storage);
               let wifi_running = Arc::clone(&wifi_running);
 

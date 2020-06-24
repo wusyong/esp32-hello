@@ -1,13 +1,13 @@
 use std::mem::MaybeUninit;
 use std::net::Ipv4Addr;
-use std::sync::atomic::{AtomicUsize, AtomicPtr, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::ptr;
 
 use esp_idf_bindgen::{esp_mac_type_t, esp_read_mac, esp_netif_t, esp_netif_create_default_wifi_ap, esp_netif_create_default_wifi_sta};
 #[cfg(target_device = "esp8266")]
 use esp_idf_bindgen::{tcpip_adapter_get_ip_info, tcpip_adapter_if_t, tcpip_adapter_ip_info_t as ip_info_t};
 #[cfg(target_device = "esp32")]
-use esp_idf_bindgen::{esp_netif_get_ip_info, esp_netif_get_handle_from_ifkey, esp_netif_ip_info_t as ip_info_t};
+use esp_idf_bindgen::{esp_netif_get_ip_info, esp_netif_ip_info_t as ip_info_t};
 use macaddr::{MacAddr, MacAddr6};
 
 use crate::assert_esp_ok;
@@ -154,21 +154,5 @@ impl IpInfo {
       netmask: u32::from_be(ip_info.netmask.addr).into(),
       gateway: u32::from_be(ip_info.gw.addr).into(),
     }
-  }
-
-  pub(crate) fn from_native(ip_info: ip_info_t) -> Option<Self> {
-    if ip_info.ip.addr == 0 && ip_info.netmask.addr == 0 && ip_info.gw.addr == 0 {
-      return None;
-    }
-
-    let ip = u32::from_be(ip_info.ip.addr);
-    let netmask = u32::from_be(ip_info.netmask.addr);
-    let gateway = u32::from_be(ip_info.gw.addr);
-
-    if ip == 0 && netmask == 0 && gateway == 0 {
-      return None;
-    }
-
-    Some(unsafe { Self::from_native_unchecked(ip_info) })
   }
 }

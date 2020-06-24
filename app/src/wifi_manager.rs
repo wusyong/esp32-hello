@@ -56,7 +56,7 @@ fn handle_internal_error(mut client: TcpStream) -> io::Result<()> {
 pub async fn handle_request(
   mut client: TcpStream, addr: SocketAddr,
   wifi_storage: Arc<Mutex<NameSpace>>,
-  mut wifi_running: Arc<Mutex<Option<WifiRunning>>>,
+  wifi_running: Arc<Mutex<Option<WifiRunning>>>,
 ) {
   println!("Handling request from {} …", addr);
 
@@ -65,7 +65,7 @@ pub async fn handle_request(
     Ok(len) => len,
     Err(err) => {
       eprintln!("Error reading from client: {:?}", err);
-      handle_internal_error(client);
+      let _ = handle_internal_error(client);
       return;
     },
   };
@@ -74,14 +74,6 @@ pub async fn handle_request(
   let mut req = httparse::Request::new(&mut headers);
 
   let status = req.parse(&buf);
-
-  let mut host = None;
-
-  for header in req.headers {
-    if header.name == "Host" {
-      host = Some(str::from_utf8(header.value).unwrap_or(""));
-    }
-  }
 
   let res = match (status, req.method, req.path) {
     (Ok(httparse::Status::Complete(header_len)), Some(method), Some(path)) => {
