@@ -116,7 +116,7 @@ pub async fn handle_request(
   }
 }
 
-pub async fn connect_ssid_password(wifi: Wifi<()>, ap_config: ApConfig, ssid: Ssid, password: Password) -> WifiRunning {
+pub async fn connect_ssid_password(wifi: Wifi, ap_config: ApConfig, ssid: Ssid, password: Password) -> WifiRunning {
   let sta_config = StaConfig::builder()
     .ssid(ssid)
     .password(password)

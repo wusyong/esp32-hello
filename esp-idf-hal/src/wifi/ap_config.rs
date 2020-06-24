@@ -61,6 +61,7 @@ impl From<&ApConfig> for wifi_config_t {
   }
 }
 
+/// Builder for [`ApConfig`](struct.ApConfig.html).
 pub struct ApConfigBuilder {
   ssid: Option<Ssid>,
   password: Password,

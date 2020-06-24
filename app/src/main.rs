@@ -1,12 +1,5 @@
 #![feature(never_type)]
-#![no_main]
-
-extern crate alloc;
-
-use alloc::string::String;
-
-#[macro_use]
-extern crate std;
+#![cfg_attr(not(doc), no_main)]
 
 use std::thread::{self, sleep};
 use std::time::Duration;

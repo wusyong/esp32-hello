@@ -66,6 +66,7 @@ impl ScanConfig {
   }
 }
 
+/// Builder for [`ScanConfig`](struct.ScanConfig.html).
 #[derive(Debug, Clone)]
 pub struct ScanConfigBuilder {
   ssid: Option<Ssid>,
@@ -114,7 +115,7 @@ impl ScanConfigBuilder {
   }
 }
 
-/// An access point record returned by a `ScanFuture`.
+/// An access point record returned by a [`ScanFuture`](struct.ScanFuture.html).
 #[derive(Debug, Clone)]
 pub struct ApRecord {
   ssid: Ssid,

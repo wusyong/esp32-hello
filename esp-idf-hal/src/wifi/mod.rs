@@ -1,5 +1,5 @@
 use core::mem::transmute;
-use core::str::{self, Utf8Error};
+use std::str::{self, FromStr, Utf8Error};
 use core::ptr;
 use std::mem::{self, MaybeUninit};
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
@@ -27,10 +27,15 @@ pub use scan::*;
 const SSID_MAX_LEN: usize = 32;
 const PASSWORD_MAX_LEN: usize = 64;
 
+/// Error returned by [`Ssid::from_bytes`](struct.Ssid.html#method.from_bytes)
+/// and [`Password::from_bytes`](struct.Password.html#method.from_bytes).
 #[derive(Debug)]
 pub enum WifiConfigError {
+  /// SSID or password contains interior `NUL`-bytes.
   InteriorNul(usize),
+  /// SSID or password is too long.
   TooLong(usize, usize),
+  /// SSID or password is not valid UTF-8.
   Utf8Error(Utf8Error),
 }
 
@@ -79,6 +84,14 @@ impl Ssid {
     let mut ssid = [0; SSID_MAX_LEN];
     ptr::copy_nonoverlapping(bytes.as_ptr(), ssid.as_mut_ptr(), ssid_len);
     Self { ssid, ssid_len }
+  }
+}
+
+impl FromStr for Ssid {
+  type Err = WifiConfigError;
+
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    Self::from_bytes(s.as_bytes())
   }
 }
 
@@ -138,6 +151,14 @@ impl Password {
 impl Default for Password {
   fn default() -> Self {
     Self { password: [0; PASSWORD_MAX_LEN], password_len: 0 }
+  }
+}
+
+impl FromStr for Password {
+  type Err = WifiConfigError;
+
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    Self::from_bytes(s.as_bytes())
   }
 }
 
@@ -206,6 +227,8 @@ impl From<AuthMode> for wifi_auth_mode_t {
   }
 }
 
+/// An instance of the WiFi peripheral.
+#[must_use = "WiFi will be stopped and deinitialized immediately. Drop it explicitly after you are done using it or create a named binding."]
 #[derive(Debug)]
 pub struct Wifi<T = ()> {
   config: T,
@@ -246,9 +269,9 @@ fn event_loop_create_default() {
 
 static WIFI_ACTIVE: AtomicBool = AtomicBool::new(false);
 
-
 impl Wifi {
-  pub fn take() -> Option<Wifi<()>> {
+  /// Take the WiFi peripheral if it is not already in use.
+  pub fn take() -> Option<Wifi> {
     if WIFI_ACTIVE.compare_and_swap(false, true, Ordering::SeqCst) {
       None
     } else {
@@ -268,12 +291,12 @@ impl Wifi {
     }
   }
 
-  /// Scan nearby WiFi networks using the specified `ScanConfig`.
+  /// Scan nearby WiFi networks using the specified [`ScanConfig`](struct.ScanConfig.html).
   pub fn scan(&mut self, scan_config: &ScanConfig) -> ScanFuture {
     ScanFuture::new(scan_config)
   }
 
-  /// Start an access point using the specified `ApConfig`.
+  /// Start an access point using the specified [`ApConfig`](struct.ApConfig.html).
   pub fn start_ap(mut self, config: ApConfig) -> Result<WifiRunning, WifiError> {
     self.deinit_on_drop = false;
 
@@ -285,7 +308,7 @@ impl Wifi {
     Ok(WifiRunning::Ap(Wifi { config, deinit_on_drop: true }))
   }
 
-  /// Connect to a WiFi network using the specified `StaConfig`.
+  /// Connect to a WiFi network using the specified [`StaConfig`](struct.StaConfig.html).
   pub fn connect_sta(mut self, config: StaConfig) -> ConnectFuture {
     self.deinit_on_drop = false;
 
@@ -305,7 +328,7 @@ impl Wifi {
 }
 
 /// A running WiFi instance.
-#[must_use = "WiFi will be stopped immediately. Drop it explicitly after you are done using it or create a named binding."]
+#[must_use = "WiFi will be stopped and deinitialized immediately. Drop it explicitly after you are done using it or create a named binding."]
 #[derive(Debug)]
 pub enum WifiRunning {
   Sta(Wifi<StaConfig>, IpInfo),
@@ -319,6 +342,8 @@ impl<T> Wifi<T> {
 }
 
 impl<T> Drop for Wifi<T> {
+  /// Stops a running WiFi instance and deinitializes it, making it available again
+  /// by calling [`Wifi::take()`](struct.Wifi.html#method.take).
   fn drop(&mut self) {
     if self.deinit_on_drop {
       if mem::size_of::<T>() != 0 {
@@ -334,9 +359,10 @@ impl<T> Drop for Wifi<T> {
 }
 
 impl Wifi<StaConfig> {
-  pub fn stop(mut self) -> (StaConfig, Wifi<()>) {
+  /// Stop a running WiFi in station mode.
+  pub fn stop(mut self) -> (StaConfig, Wifi) {
     self.deinit_on_drop = false;
-    assert_esp_ok!(esp_wifi_stop());
+    esp_ok!(esp_wifi_stop()).unwrap(); // Can only fail when WiFi is not initialized.
     let config = MaybeUninit::uninit();
     let config = mem::replace(&mut self.config, unsafe { config.assume_init() });
     (config, Wifi { config: (), deinit_on_drop: true })
@@ -344,9 +370,10 @@ impl Wifi<StaConfig> {
 }
 
 impl Wifi<ApConfig> {
-  pub fn stop(mut self) -> (ApConfig, Wifi<()>) {
+  /// Stop a running WiFi access point.
+  pub fn stop(mut self) -> (ApConfig, Wifi) {
     self.deinit_on_drop = false;
-    assert_esp_ok!(esp_wifi_stop());
+    esp_ok!(esp_wifi_stop()).unwrap(); // Can only fail when WiFi is not initialized.
     let config = MaybeUninit::uninit();
     let config = mem::replace(&mut self.config, unsafe { config.assume_init() });
     (config, Wifi { config: (), deinit_on_drop: true })
@@ -361,6 +388,7 @@ enum ConnectFutureState {
   Connected { ip_info: IpInfo, ssid: Ssid, bssid: MacAddr6, channel: u8, auth_mode: AuthMode },
 }
 
+/// A future representing an ongoing connection to an access point.
 #[must_use = "futures do nothing unless polled"]
 #[derive(Debug)]
 pub struct ConnectFuture {
@@ -368,15 +396,32 @@ pub struct ConnectFuture {
   state: ConnectFutureState,
 }
 
+/// The error type returned when a [`ConnectFuture`](struct.ConnectFuture.html) fails.
+#[derive(Debug, Clone)]
+pub struct ConnectionError {
+  ssid: Ssid,
+  bssid: MacAddr6,
+  reason: wifi_err_reason_t,
+}
 
+impl fmt::Display for ConnectionError {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "Error connecting to {} ({}): {:?}", self.ssid, self.bssid, self.reason)
+  }
+}
+
+/// The error type for operations on a [`Wifi`](struct.Wifi.html) instance.
 #[derive(Debug, Clone)]
 pub enum WifiError {
+  /// An internal error not directly related to WiFi.
   Internal(EspError),
-  ConnectionError(wifi_err_reason_t),
+  /// A connection error returned when a [`ConnectFuture`](struct.ConnectFuture.html) fails.
+  ConnectionError(ConnectionError),
 }
 
 impl WifiError {
-  pub fn wifi(self) -> Wifi<()> {
+  /// Create a new uninitialized [`Wifi`](struct.Wifi.html) instance.
+  pub fn wifi(self) -> Wifi {
     Wifi { config: (), deinit_on_drop: true }
   }
 }
@@ -391,7 +436,7 @@ impl fmt::Display for WifiError {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
       Self::Internal(esp_error) => esp_error.fmt(f),
-      Self::ConnectionError(reason) => write!(f, "connection error: {:?}", reason),
+      Self::ConnectionError(error) => error.fmt(f),
     }
   }
 }
@@ -518,8 +563,12 @@ extern "C" fn wifi_sta_handler(
         let bssid = MacAddr6::from(event.bssid);
         let reason: wifi_err_reason_t = unsafe { transmute(event.reason as u32) };
 
+        let error = ConnectionError {
+          ssid, bssid, reason
+        };
+
         let (mut f, waker) = unsafe { *Box::from_raw(event_handler_arg as *mut (Pin<&mut ConnectFuture>, &Waker)) };
-        f.state = ConnectFutureState::Failed(WifiError::ConnectionError(reason));
+        f.state = ConnectFutureState::Failed(WifiError::ConnectionError(error));
 
         eprintln!("EVENT_STATE: {:?}", f.state);
 

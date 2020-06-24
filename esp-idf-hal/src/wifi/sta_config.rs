@@ -129,6 +129,7 @@ impl From<&StaConfig> for wifi_config_t {
   }
 }
 
+/// Builder for [`StaConfig`](struct.StaConfig.html).
 pub struct StaConfigBuilder {
   ssid: Option<Ssid>,
   password: Password,
