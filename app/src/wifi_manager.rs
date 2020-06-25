@@ -5,6 +5,7 @@ use std::str;
 
 use esp_idf_hal::{nvs::NameSpace, wifi::*};
 
+/// Try parsing `Ssid` and `Password` from URL parameters.
 fn ssid_and_password(params: &[u8]) -> (Option<Ssid>, Option<Password>) {
   let mut ssid = None;
   let mut password = None;
@@ -116,23 +117,24 @@ pub async fn handle_request(
   }
 }
 
+/// Try to connect to an access point with the given `ssid` and `password` in station mode, otherwise revert to access point mode.
 pub async fn connect_ssid_password(wifi: Wifi, ap_config: ApConfig, ssid: Ssid, password: Password) -> WifiRunning {
   let sta_config = StaConfig::builder()
     .ssid(ssid)
     .password(password)
     .build();
 
-  println!("Connecting to '{}' with password '{}' …", sta_config.ssid(), sta_config.password());
+  eprintln!("Connecting to '{}' with password '{}' …", sta_config.ssid(), sta_config.password());
 
   match wifi.connect_sta(sta_config).await {
     Ok(sta) => {
       if let WifiRunning::Sta(ref sta, ref ip_info) = sta {
-        println!("Connected to '{}' with IP '{}'.", sta.config().ssid(), ip_info.ip());
+        eprintln!("Connected to '{}' with IP '{}'.", sta.config().ssid(), ip_info.ip());
       }
       sta
     },
     Err(err) => {
-      err.wifi().start_ap(ap_config).unwrap()
+      err.wifi().start_ap(ap_config).expect("Failed to start access point")
     }
   }
 }
