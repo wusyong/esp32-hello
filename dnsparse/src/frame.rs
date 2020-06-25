@@ -32,7 +32,7 @@ impl Deref for DnsFrame {
   }
 }
 
-const DOT: u8 = '.' as u32 as u8;
+const DOT: u8 = b'.';
 
 impl DnsFrame {
   pub fn new(header: DnsHeader) -> Self {
