@@ -1,6 +1,7 @@
 use core::fmt;
 use core::mem::size_of;
 
+/// A DNS header.
 #[derive(Clone)]
 #[repr(C)]
 pub struct DnsHeader {
@@ -12,12 +13,14 @@ pub struct DnsHeader {
   additional_records_count: [u8; 2],
 }
 
+/// The kind of a DNS header.
 #[derive(Debug, PartialEq)]
 pub enum HeaderKind {
   Query,
   Response,
 }
 
+/// A DNS opcode.
 #[derive(Debug, PartialEq)]
 pub enum OpCode {
   Query,
@@ -28,6 +31,7 @@ pub enum OpCode {
   Reserved(u8)
 }
 
+/// A DNS response code.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum ResponseCode {
   NoError,
@@ -100,6 +104,7 @@ impl From<u16> for ResponseCode {
   }
 }
 
+/// The kind of a DNS query.
 #[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(u16)]
 pub enum QueryKind {
@@ -160,7 +165,7 @@ impl QueryKind {
   }
 }
 
-/// https://tools.ietf.org/rfc/rfc1035.txt
+/// The class of a DNS query.
 #[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(u16)]
 pub enum QueryClass {
@@ -209,14 +214,17 @@ impl fmt::Debug for DnsHeader {
 }
 
 impl DnsHeader {
+  #[inline]
   pub fn id(&self) -> u16 {
     u16::from_be_bytes(self.id)
   }
 
+  #[inline]
   pub fn set_id(&mut self, id: u16) {
     self.id = id.to_be_bytes()
   }
 
+  #[inline]
   pub fn kind(&self) -> HeaderKind {
     if (self.flags[0] & 0b10000000) == 0 {
       HeaderKind::Query
@@ -225,6 +233,7 @@ impl DnsHeader {
     }
   }
 
+  #[inline]
   pub fn set_kind(&mut self, kind: HeaderKind) {
     match kind {
       HeaderKind::Query    => self.flags[0] &= 0b01111111,
@@ -232,6 +241,7 @@ impl DnsHeader {
     }
   }
 
+  #[inline]
   pub fn opcode(&self) -> OpCode {
     match (self.flags[0] & 0b01111000) >> 3 {
       0 => OpCode::Query,
@@ -243,6 +253,7 @@ impl DnsHeader {
     }
   }
 
+  #[inline]
   pub fn set_opcode(&mut self, opcode: OpCode) {
     self.flags[0] = (self.flags[0] & 0b10000111) | (match opcode {
       OpCode::Query => 0,
@@ -254,18 +265,22 @@ impl DnsHeader {
     } << 3);
   }
 
+  #[inline]
   pub fn authoritative_answer(&self) -> bool {
     (self.flags[0] & 0b00000100) != 0
   }
 
+  #[inline]
   pub fn truncated(&self) -> bool {
     (self.flags[0] & 0b00000010) != 0
   }
 
+  #[inline]
   pub fn recursion_desired(&self) -> bool {
     (self.flags[0] & 0b00000001) != 0
   }
 
+  #[inline]
   pub fn set_recursion_desired(&mut self, recursion_desired: bool) {
     if recursion_desired {
       self.flags[0] |= 0b00000001;
@@ -274,10 +289,12 @@ impl DnsHeader {
     }
   }
 
+  #[inline]
   pub fn recursion_available(&self) -> bool {
     (self.flags[1] & 0b10000000) != 0
   }
 
+  #[inline]
   pub fn set_recursion_available(&mut self, recursion_available: bool) {
     if recursion_available {
       self.flags[1] |= 0b10000000;
@@ -286,47 +303,104 @@ impl DnsHeader {
     }
   }
 
+  #[inline]
   pub fn response_code(&self) -> ResponseCode {
     u16::from(self.flags[1] & 0b00001111).into()
   }
 
+  #[inline]
   pub fn set_response_code(&mut self, response_code: ResponseCode) {
     self.flags[1] = (self.flags[1] & 0b11110000) | u16::from(response_code) as u8;
   }
 
+  #[inline]
   pub fn question_count(&self) -> u16 {
     u16::from_be_bytes(self.question_count)
   }
 
+  #[inline]
   pub fn set_question_count(&mut self, question_count: u16) {
     self.question_count = question_count.to_be_bytes();
   }
 
+  #[inline]
   pub fn answer_count(&self) -> u16 {
     u16::from_be_bytes(self.answer_count)
   }
 
+  #[inline]
   pub fn set_answer_count(&mut self, answer_count: u16) {
     self.answer_count = answer_count.to_be_bytes();
   }
 
+  #[inline]
   pub fn name_server_count(&self) -> u16 {
     u16::from_be_bytes(self.name_server_count)
   }
 
+  #[inline]
   pub fn set_name_server_count(&mut self, name_server_count: u16) {
     self.name_server_count = name_server_count.to_be_bytes();
   }
 
+  #[inline]
   pub fn additional_records_count(&self) -> u16 {
     u16::from_be_bytes(self.additional_records_count)
   }
 
+  #[inline]
   pub fn set_additional_records_count(&mut self, additional_records_count: u16) {
     self.additional_records_count = additional_records_count.to_be_bytes();
   }
 
+  #[inline]
   pub fn as_bytes(&self) -> &[u8] {
     unsafe { &*(self as *const _ as *const [u8; size_of::<Self>()]) }
+  }
+
+  #[inline]
+  pub fn builder() -> DnsHeaderBuilder {
+    DnsHeaderBuilder::new()
+  }
+}
+
+/// Builder for [`DnsHeader`](struct.DnsHeader.html).
+pub struct DnsHeaderBuilder(DnsHeader);
+
+impl DnsHeaderBuilder {
+  #[inline]
+  pub fn new() -> Self {
+    Self(DnsHeader {
+      id: [0, 0],
+      flags: [0, 0],
+      question_count: [0, 0],
+      answer_count: [0, 0],
+      name_server_count: [0, 0],
+      additional_records_count: [0, 0],
+    })
+  }
+
+  pub fn id(mut self, id: u16) -> Self {
+    self.0.set_id(id);
+    self
+  }
+
+  pub fn kind(mut self, kind: HeaderKind) -> Self {
+    self.0.set_kind(kind);
+    self
+  }
+
+  pub fn recursion_available(mut self, recursion_available: bool) -> Self {
+    self.0.set_recursion_available(recursion_available);
+    self
+  }
+
+  pub fn response_code(mut self, response_code: ResponseCode) -> Self {
+    self.0.set_response_code(response_code);
+    self
+  }
+
+  pub fn build(self) -> DnsHeader {
+    self.0
   }
 }

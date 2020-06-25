@@ -7,6 +7,7 @@ use crate::{DnsHeader, Question, Questions};
 const HEADER_SIZE: usize = size_of::<DnsHeader>();
 const MAX_MESSAGE_SIZE: usize = 512;
 
+/// A DNS frame.
 #[repr(C)]
 pub struct DnsFrame {
   header: DnsHeader,
@@ -32,8 +33,6 @@ impl Deref for DnsFrame {
   }
 }
 
-const DOT: u8 = b'.';
-
 impl DnsFrame {
   pub fn new(header: DnsHeader) -> Self {
     Self {
@@ -56,18 +55,7 @@ impl DnsFrame {
   }
 
   pub fn add_question(&mut self, question: &Question) {
-    let mut i = 0;
-
-    let question = question.as_bytes();
-
-    while question[i] == DOT {
-      let part_len = question[(i + 1)..].iter().take_while(|&&b| b != DOT && b != 0).count();
-      self.extend(&[part_len as u8]);
-      self.extend(&question[(i + 1)..(i + 1 + part_len)]);
-      i += part_len + 1;
-    }
-
-    self.extend(&question[i..(i + 5)]);
+    self.extend(&question.as_bytes());
   }
 
   pub fn add_ttl(&mut self, ttl: u32) {
