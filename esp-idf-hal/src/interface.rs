@@ -10,8 +10,6 @@ use esp_idf_bindgen::{tcpip_adapter_get_ip_info, tcpip_adapter_if_t, tcpip_adapt
 use esp_idf_bindgen::{esp_netif_get_ip_info, esp_netif_ip_info_t as ip_info_t};
 use macaddr::{MacAddr, MacAddr6};
 
-use crate::assert_esp_ok;
-
 static AP_PTR: AtomicUsize = AtomicUsize::new(0);
 static STA_PTR: AtomicUsize = AtomicUsize::new(0);
 const INIT_SENTINEL: usize = usize::max_value();
@@ -42,7 +40,7 @@ impl Interface {
     };
 
     let mut ip_info = MaybeUninit::<ip_info_t>::uninit();
-    assert_esp_ok!(tcpip_adapter_get_ip_info(interface, ip_info.as_mut_ptr()));
+    esp_ok!(tcpip_adapter_get_ip_info(interface, ip_info.as_mut_ptr())).unwrap(); // Can only fail with invalid arguments.
     unsafe { IpInfo::from_native_unchecked(ip_info.assume_init()) }
   }
 
@@ -50,7 +48,7 @@ impl Interface {
   #[cfg(target_device = "esp32")]
   pub fn ip_info(&self) -> IpInfo {
     let mut ip_info = MaybeUninit::<ip_info_t>::uninit();
-    assert_esp_ok!(esp_netif_get_ip_info(self.ptr(), ip_info.as_mut_ptr()));
+    esp_ok!(esp_netif_get_ip_info(self.ptr(), ip_info.as_mut_ptr())).unwrap(); // Can only fail if `self.ptr()` returns `NUL`, in which case the interface does not support IPs.
     unsafe { IpInfo::from_native_unchecked(ip_info.assume_init()) }
   }
 
@@ -109,7 +107,7 @@ impl From<Interface> for MacAddr6 {
     };
 
     let mut mac_address = MaybeUninit::<Self>::uninit();
-    assert_esp_ok!(esp_read_mac(mac_address.as_mut_ptr() as *mut _, mac_address_type));
+    esp_ok!(esp_read_mac(mac_address.as_mut_ptr() as *mut _, mac_address_type)).unwrap(); // Can only fail with invalid arguments.
     unsafe { mac_address.assume_init() }
   }
 }

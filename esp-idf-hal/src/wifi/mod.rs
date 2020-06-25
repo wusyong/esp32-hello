@@ -11,7 +11,7 @@ use alloc::boxed::Box;
 use core::fmt;
 use macaddr::MacAddr6;
 
-use crate::{EspError, assert_esp_ok, esp_ok, nvs::NonVolatileStorage, interface::{Interface, IpInfo}};
+use crate::{EspError, nvs::NonVolatileStorage, interface::{Interface, IpInfo}};
 
 use esp_idf_bindgen::*;
 
@@ -241,7 +241,7 @@ fn netif_init() {
   loop {
     match NETIF_STATE.compare_and_swap(0, 1, Ordering::SeqCst) {
       0 => {
-        assert_esp_ok!(esp_netif_init());
+        esp_ok!(esp_netif_init()).expect("failed to initialize network interface");
         NETIF_STATE.store(2, Ordering::SeqCst);
         return;
       },
@@ -257,7 +257,7 @@ fn event_loop_create_default() {
   loop {
     match EVENT_LOOP_STATE.compare_and_swap(0, 1, Ordering::SeqCst) {
       0 => {
-        assert_esp_ok!(esp_event_loop_create_default());
+        esp_ok!(esp_event_loop_create_default()).expect("failed to initialize default event loop");
         EVENT_LOOP_STATE.store(2, Ordering::SeqCst);
         return;
       },
@@ -285,7 +285,7 @@ impl Wifi {
 
       NonVolatileStorage::init_default();
       let config = wifi_init_config_t::default();
-      assert_esp_ok!(esp_wifi_init(&config));
+      esp_ok!(esp_wifi_init(&config)).expect("failed to initialize WiFi with default configuration");
 
       Some(Wifi { config: (), deinit_on_drop: true })
     }
