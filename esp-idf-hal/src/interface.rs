@@ -124,6 +124,7 @@ impl From<Interface> for MacAddr {
   }
 }
 
+/// IP information for an [`Interface`](enum.Interface.html).
 #[derive(Debug)]
 pub struct IpInfo {
   ip: Ipv4Addr,
