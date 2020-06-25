@@ -58,11 +58,6 @@ jobs:
         with:
           path: target/esp-idf-tools
           key: esp-idf-tools-${{ steps.set_esp_idf_version.outputs.esp_idf_version }}
-      - name: Cache ESP IDF Build
-        uses: actions/cache@v1
-        with:
-          path: target/xtensa-esp32-none-elf/esp-build
-          key: esp-idf-build-${{ steps.set_esp_idf_version.outputs.esp_idf_version }}
       - name: Build Project
         run: ./build.sh
       - name: Log into Docker Hub
