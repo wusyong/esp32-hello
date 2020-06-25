@@ -12,7 +12,6 @@ extern crate alloc;
 mod esp_error;
 pub use esp_error::EspError;
 
-pub mod ets;
 pub mod interface;
 mod heap;
 pub use heap::Heap;
