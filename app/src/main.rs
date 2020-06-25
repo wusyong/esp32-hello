@@ -41,7 +41,7 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
 
     println!("AP started.");
 
-    let namespace = nvs.open("wifi")?;
+    let namespace = nvs.namespace("wifi")?;
     println!("namespace: {:?}", namespace);
 
     let t = thread::Builder::new()

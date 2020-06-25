@@ -283,7 +283,7 @@ impl Wifi {
 
       event_loop_create_default();
 
-      NonVolatileStorage::init_default();
+      NonVolatileStorage::init_default().expect("failed to initialize default NVS partition");
       let config = wifi_init_config_t::default();
       esp_ok!(esp_wifi_init(&config)).expect("failed to initialize WiFi with default configuration");
 

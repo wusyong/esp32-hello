@@ -4,9 +4,9 @@ use esp_idf_hal::nvs::*;
 
 #[no_mangle]
 fn app_main() {
-  let mut nvs_partition = NonVolatileStorage::default();
+  let mut nvs = NonVolatileStorage::default();
 
-  let mut nvs = nvs_partition.open("test").unwrap();
+  let mut nvs = nvs.namespace("test").unwrap();
 
   macro_rules! test_set_get {
     ($nvs:expr, $ty:ty, $value:expr) => {

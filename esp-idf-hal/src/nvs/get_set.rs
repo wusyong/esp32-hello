@@ -27,10 +27,12 @@ use esp_idf_bindgen::{
 
 use super::*;
 
+/// Trait for retrieving data from non-volatile storage.
 pub trait NvsGet: Sized {
   fn nvs_get(namespace: &NameSpace, key: &CStr) -> Result<Self, EspError>;
 }
 
+/// Trait for saving data in non-volatile storage.
 pub trait NvsSet {
   fn nvs_set(&self, namespace: &mut NameSpace, key: &CStr) -> Result<(), EspError>;
 }
