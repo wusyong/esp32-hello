@@ -1,4 +1,5 @@
 use core::fmt;
+use core::mem::size_of;
 use core::str;
 
 use crate::{ResponseCode, QueryKind, QueryClass};
@@ -125,36 +126,41 @@ impl<'a> Iterator for Questions<'a> {
       return None
     }
 
-    let mut len = 0;
+    let mut i = self.buf_i;
 
     loop {
-      let i = self.buf_i + len;
-
-      let part_len = if let Some(&len) = self.buf.get(i) {
-        len as usize
+      let end = if let Some(&len) = self.buf.get(i) {
+        // Check for pointer:
+        // https://tools.ietf.org/rfc/rfc1035#section-4.1.4
+        if (len >> 6) == 0b11 {
+          i += 1 + 1;
+          true
+        } else {
+          let part_len = len & 0b00111111;
+          i += 1 + part_len as usize;
+          part_len == 0
+        }
       } else {
-        return Some(Err(ResponseCode::FormatError))
+        break
       };
 
-      if part_len == 0 {
-        if i + 5 > self.buf.len() {
-          return Some(Err(ResponseCode::FormatError))
-        } else {
-          len += 5;
+      if end {
+        i += size_of::<QueryClass>() + size_of::<QueryKind>() + 1;
+
+        if i > self.buf.len() {
+          break
         }
 
-        let question = Question { buf: &self.buf[self.buf_i..(self.buf_i + len)] };
+        let question = Question { buf: &self.buf[self.buf_i..i] };
 
         self.current_question += 1;
-        self.buf_i += len;
+        self.buf_i = i;
 
         return Some(Ok(question))
-      } else if i + 1 + part_len > self.buf.len() {
-        return Some(Err(ResponseCode::FormatError))
       }
-
-      len += part_len + 1;
     }
+
+    Some(Err(ResponseCode::FormatError))
   }
 }
 
