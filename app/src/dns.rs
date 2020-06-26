@@ -1,5 +1,4 @@
 use std::net::{Ipv4Addr, UdpSocket};
-use std::mem::{size_of, MaybeUninit};
 use std::thread;
 
 use esp_idf_hal::interface::Interface;
@@ -64,24 +63,20 @@ pub fn server() {
   'outer: loop {
     thread::yield_now();
 
-    let (request, src) = unsafe {
-      let mut frame = MaybeUninit::<DnsFrame>::uninit();
+    let mut buf = DnsFrame::BUFFER;
 
-      let (len, src) = match socket.recv_from((&mut *frame.as_mut_ptr()).as_mut_slice()) {
-        Ok(ok) => ok,
-        Err(err) => {
-          eprintln!("DNS received failed: {:?}", err);
-          continue
-        }
-      };
-
-      if len < size_of::<DnsHeader>() {
-        continue 'outer
+    let (len, src) = match socket.recv_from(&mut buf) {
+      Ok(ok) => ok,
+      Err(err) => {
+        eprintln!("Receiving DNS request failed: {}", err);
+        continue
       }
+    };
 
-      (&mut *frame.as_mut_ptr()).set_len(len);
-
-      (frame.assume_init(), src)
+    let request = if let Ok(frame) = DnsFrame::parse(buf, len) {
+      frame
+    } else {
+      continue 'outer
     };
 
     let response = handle_request(request, &ip);

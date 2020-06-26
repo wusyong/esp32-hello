@@ -3,7 +3,7 @@
 //! See [RFC 1035](https://tools.ietf.org/rfc/rfc1035).
 
 mod frame;
-pub use frame::DnsFrame;
+pub use frame::{DnsFrame, DnsFrameBuffer};
 
 mod header;
 pub use header::{DnsHeader, HeaderKind, ResponseCode, OpCode, QueryKind, QueryClass};

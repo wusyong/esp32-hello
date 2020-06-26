@@ -1,5 +1,5 @@
 use core::ops::Deref;
-use core::mem::size_of;
+use core::mem::{size_of, transmute};
 use core::fmt;
 
 use crate::{DnsHeader, Question, Questions};
@@ -7,12 +7,29 @@ use crate::{DnsHeader, Question, Questions};
 const HEADER_SIZE: usize = size_of::<DnsHeader>();
 const MAX_MESSAGE_SIZE: usize = 512;
 
+pub type DnsFrameBuffer = [u8; size_of::<DnsFrame>()];
+
 /// A DNS frame.
 #[repr(C)]
 pub struct DnsFrame {
   header: DnsHeader,
   msg: [u8; MAX_MESSAGE_SIZE],
   len: usize,
+}
+
+impl DnsFrame {
+  pub const BUFFER: DnsFrameBuffer = [0; size_of::<DnsFrame>()];
+
+  pub fn parse(buffer: DnsFrameBuffer, len: usize) -> Result<DnsFrame, ()> {
+    if len < HEADER_SIZE || len > HEADER_SIZE + MAX_MESSAGE_SIZE {
+      return Err(())
+    }
+
+    let mut frame: Self = unsafe { transmute(buffer) };
+    frame.len = len - size_of::<DnsHeader>();
+
+    Ok(frame)
+  }
 }
 
 impl fmt::Debug for DnsFrame {
@@ -67,18 +84,9 @@ impl DnsFrame {
     self.extend(data);
   }
 
-  pub fn extend(&mut self, bytes: &[u8]) {
+  fn extend(&mut self, bytes: &[u8]) {
     self.msg[self.len..(self.len + bytes.len())].copy_from_slice(bytes);
     self.len += bytes.len();
-  }
-
-  pub unsafe fn set_len(&mut self, len: usize) {
-    debug_assert!(len >= HEADER_SIZE && len <= (HEADER_SIZE + MAX_MESSAGE_SIZE));
-    self.len = len - HEADER_SIZE;
-  }
-
-  pub unsafe fn as_mut_slice(&mut self) -> &mut [u8] {
-    &mut *(&mut self.header as *mut _ as *mut [u8; HEADER_SIZE + MAX_MESSAGE_SIZE])
   }
 
   pub fn as_bytes(&self) -> &[u8] {
@@ -95,11 +103,5 @@ impl DnsFrame {
       buf: &self.body(),
       buf_i: 0,
     }
-  }
-}
-
-impl From<DnsHeader> for DnsFrame {
-  fn from(header: DnsHeader) -> Self {
-    Self::new(header)
   }
 }
