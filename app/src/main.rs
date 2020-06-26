@@ -1,6 +1,7 @@
 #![feature(never_type)]
 #![cfg_attr(not(doc), no_main)]
 
+use std::sync::{Arc, Mutex};
 use std::thread::{self, sleep};
 use std::time::Duration;
 use std::net::{Ipv4Addr, SocketAddrV4};
@@ -46,7 +47,7 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
 
     let t = thread::Builder::new()
       .name("hello_thread".into())
-      .stack_size(8192)
+      .stack_size(2048)
       .spawn(|| {
         println!("HELLO, WORLD!");
         42
@@ -57,12 +58,13 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
 
     thread::Builder::new()
       .name("dns_thread".into())
-      .stack_size(8192)
+      .stack_size(6144)
       .spawn(dns::server)
       .unwrap();
 
     thread::Builder::new()
       .name("blink_thread".into())
+      .stack_size(1024)
       .spawn(move || {
         loop {
           gpio.set_low().unwrap();
@@ -100,8 +102,6 @@ async fn rust_blink_and_write() -> Result<!, EspError> {
         }
 
         let stream = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 80)).expect("failed starting TCP listener");
-
-        use std::sync::{Arc, Mutex};
 
         let wifi_running = Arc::new(Mutex::new(Some(wifi_running)));
         let wifi_storage = Arc::new(Mutex::new(wifi_storage));
