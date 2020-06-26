@@ -146,6 +146,48 @@ pub struct Questions<'a> {
   pub(crate) buf_i: usize,
 }
 
+fn read_question(buf: &[u8], i: &mut usize) -> bool {
+  loop {
+    match read_label(buf, i) {
+      None => return false,
+      Some(false) => continue,
+      Some(true) => return read_query_class_and_kind(buf, i),
+    }
+  }
+}
+
+// Return whether a label was read and whether it was the last label.
+fn read_label(buf: &[u8], i: &mut usize) -> Option<bool> {
+  if let Some(&pointer_or_len) = buf.get(*i) {
+    // Check for pointer:
+    // https://tools.ietf.org/rfc/rfc1035#section-4.1.4
+    if is_pointer(pointer_or_len) {
+      if *i + 1 + 1 < buf.len() {
+        *i += 1 + 1;
+        Some(true)
+      } else {
+        None
+      }
+    } else {
+      let part_len = mask_len(pointer_or_len);
+      *i += 1 + part_len;
+      Some(part_len == 0)
+    }
+  } else {
+    None
+  }
+}
+
+#[inline]
+fn read_query_class_and_kind(buf: &[u8], i: &mut usize) -> bool {
+  if *i + size_of::<QueryClass>() + size_of::<QueryKind>() <= buf.len() {
+    *i += size_of::<QueryClass>() + size_of::<QueryKind>();
+    true
+  } else {
+    false
+  }
+}
+
 impl<'a> Iterator for Questions<'a> {
   type Item = Result<Question<'a>, ResponseCode>;
 
@@ -156,40 +198,17 @@ impl<'a> Iterator for Questions<'a> {
 
     let mut i = self.buf_i;
 
-    loop {
-      let end = if let Some(&pointer_or_len) = self.buf.get(i) {
-        // Check for pointer:
-        // https://tools.ietf.org/rfc/rfc1035#section-4.1.4
-        if is_pointer(pointer_or_len) {
-          i += 1 + 1;
-          true
-        } else {
-          let part_len = mask_len(pointer_or_len);
-          i += 1 + part_len;
-          part_len == 0
-        }
-      } else {
-        break
-      };
+    if read_question(&self.buf, &mut i) {
+      let question = Question { buf: &self.buf, start: self.buf_i, end: i };
 
-      if end {
-        i += size_of::<QueryClass>() + size_of::<QueryKind>();
+      self.current_question += 1;
+      self.buf_i = i;
 
-        if i > self.buf.len() {
-          break
-        }
-
-        let question = Question { buf: &self.buf, start: self.buf_i, end: i };
-
-        self.current_question += 1;
-        self.buf_i = i;
-
-        return Some(Ok(question))
-      }
+      return Some(Ok(question))
+    } else {
+      self.current_question = self.question_count;
+      Some(Err(ResponseCode::FormatError))
     }
-
-    self.current_question = self.question_count;
-    Some(Err(ResponseCode::FormatError))
   }
 }
 
