@@ -1,4 +1,5 @@
 use std::net::{Ipv4Addr, UdpSocket};
+use std::time::Duration;
 use std::thread;
 
 use esp_idf_hal::interface::Interface;
@@ -56,6 +57,8 @@ pub fn server() {
   println!("Starting DNS server …");
 
   let socket = UdpSocket::bind("0.0.0.0:53").unwrap();
+  socket.set_read_timeout(Some(Duration::from_secs(30))).unwrap();
+  socket.set_write_timeout(Some(Duration::from_secs(30))).unwrap();
 
   let ip = *Interface::Ap.ip_info().ip();
   println!("IP: {:?}", ip);
@@ -68,7 +71,9 @@ pub fn server() {
     let (len, src) = match socket.recv_from(&mut buf) {
       Ok(ok) => ok,
       Err(err) => {
-        eprintln!("Receiving DNS request failed: {}", err);
+        if err.kind() != std::io::ErrorKind::WouldBlock {
+          eprintln!("Receiving DNS request failed: {}", err);
+        }
         continue
       }
     };
