@@ -8,6 +8,8 @@ use crate::{ResponseCode, QueryKind, QueryClass};
 #[repr(C)]
 pub struct Question<'a> {
   buf: &'a [u8],
+  start: usize,
+  end: usize,
 }
 
 impl fmt::Debug for Question<'_> {
@@ -24,20 +26,37 @@ impl fmt::Debug for Question<'_> {
 #[derive(Debug)]
 pub struct QuestionName<'a> {
   buf: &'a [u8],
+  start: usize,
+  end: usize,
+}
+
+const fn is_pointer(len: u8) -> bool {
+  (len >> 6) == 0b11
+}
+
+const fn mask_len(len: u8) -> usize {
+  (len & 0b00111111) as usize
 }
 
 impl fmt::Display for QuestionName<'_> {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    let mut i = 0;
+    let mut i = self.start;
 
-    while i < self.buf.len() {
-      let len = self.buf[i] as usize;
+    loop {
+      let pointer_or_len = self.buf[i];
 
-      if len == 0 {
-        break
+      let len = mask_len(pointer_or_len);
+
+      if is_pointer(pointer_or_len) {
+        i = (len << 8) + self.buf[i + 1] as usize;
+        continue;
       }
 
-      if i != 0 {
+      if len == 0 {
+        return Ok(())
+      }
+
+      if i != self.start {
         ".".fmt(f)?;
       }
 
@@ -49,32 +68,42 @@ impl fmt::Display for QuestionName<'_> {
 
       i += len;
     }
-
-    Ok(())
   }
 }
 
 impl PartialEq<&str> for QuestionName<'_> {
   fn eq(&self, other: &&str) -> bool {
-    let mut i = 0;
+    let mut i = self.start;
+    let mut other_i = 0;
 
-    while i < self.buf.len() {
-      let len = self.buf[i] as usize;
+    let other = other.as_bytes();
 
-      if len == 0 {
-        break
+    loop {
+      let pointer_or_len = self.buf[i];
+
+      let len = mask_len(pointer_or_len);
+
+      if is_pointer(pointer_or_len) {
+        i = (len << 8) + self.buf[i + 1] as usize;
+        continue;
       }
 
-      if i != 0 && other.get((i - 1)..i) != Some(".") {
-        return false
+      if len == 0 {
+        return true
+      }
+
+      if other_i != 0 {
+        if other.get(other_i) != Some(&b'.') {
+          return false
+        } else {
+          other_i += 1;
+        }
       }
 
       i += 1;
 
-      let s = unsafe { str::from_utf8_unchecked(&self.buf[i..(i + len)]) };
-
-      if let Some(substring) = other.get((i - 1)..(i - 1 + len)) {
-        if s != substring {
+      if let Some(substring) = other.get(other_i..(other_i + len)) {
+        if &self.buf[i..(i + len)] != substring {
           return false
         }
       } else {
@@ -82,31 +111,30 @@ impl PartialEq<&str> for QuestionName<'_> {
       }
 
       i += len;
+      other_i += len;
     }
-
-    i == other.len() + 1
   }
 }
 
 impl<'a> Question<'a> {
   pub fn name(&self) -> QuestionName<'a> {
-    QuestionName { buf: &self.buf[0..(self.buf.len() - 5)] }
+    QuestionName { buf: self.buf, start: self.start, end: self.end - 5 }
   }
 
   pub fn kind(&self) -> QueryKind {
-    let b0 = self.buf.len() - 4;
+    let b0 = self.end - 4;
     let b1 = b0 + 1;
     QueryKind::from(u16::from_be_bytes([self.buf[b0], self.buf[b1]]))
   }
 
   pub fn class(&self) -> QueryClass {
-    let b0 = self.buf.len() - 2;
+    let b0 = self.end - 2;
     let b1 = b0 + 1;
     QueryClass::from(u16::from_be_bytes([self.buf[b0], self.buf[b1]]))
   }
 
   pub fn as_bytes(&self) -> &'a [u8] {
-    self.buf
+    &self.buf[self.start..self.end]
   }
 }
 
@@ -129,15 +157,15 @@ impl<'a> Iterator for Questions<'a> {
     let mut i = self.buf_i;
 
     loop {
-      let end = if let Some(&len) = self.buf.get(i) {
+      let end = if let Some(&pointer_or_len) = self.buf.get(i) {
         // Check for pointer:
         // https://tools.ietf.org/rfc/rfc1035#section-4.1.4
-        if (len >> 6) == 0b11 {
+        if is_pointer(pointer_or_len) {
           i += 1 + 1;
           true
         } else {
-          let part_len = len & 0b00111111;
-          i += 1 + part_len as usize;
+          let part_len = mask_len(pointer_or_len);
+          i += 1 + part_len;
           part_len == 0
         }
       } else {
@@ -145,13 +173,13 @@ impl<'a> Iterator for Questions<'a> {
       };
 
       if end {
-        i += size_of::<QueryClass>() + size_of::<QueryKind>() + 1;
+        i += size_of::<QueryClass>() + size_of::<QueryKind>();
 
         if i > self.buf.len() {
           break
         }
 
-        let question = Question { buf: &self.buf[self.buf_i..i] };
+        let question = Question { buf: &self.buf, start: self.buf_i, end: i };
 
         self.current_question += 1;
         self.buf_i = i;
@@ -160,6 +188,7 @@ impl<'a> Iterator for Questions<'a> {
       }
     }
 
+    self.current_question = self.question_count;
     Some(Err(ResponseCode::FormatError))
   }
 }
