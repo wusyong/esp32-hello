@@ -26,7 +26,7 @@ impl DnsFrame {
     }
 
     let mut frame: Self = unsafe { transmute(buffer) };
-    frame.len = len - size_of::<DnsHeader>();
+    frame.len = len;
 
     Ok(frame)
   }
@@ -55,7 +55,7 @@ impl DnsFrame {
     Self {
       header,
       msg: [0; MAX_MESSAGE_SIZE],
-      len: 0,
+      len: HEADER_SIZE,
     }
   }
 
@@ -68,7 +68,7 @@ impl DnsFrame {
   }
 
   pub fn body(&self) -> &[u8] {
-    &self.msg[..self.len]
+    &self.msg[..(self.len - HEADER_SIZE)]
   }
 
   pub fn add_question(&mut self, question: &Question) {
@@ -85,14 +85,13 @@ impl DnsFrame {
   }
 
   fn extend(&mut self, bytes: &[u8]) {
-    self.msg[self.len..(self.len + bytes.len())].copy_from_slice(bytes);
+    self.msg[(self.len - HEADER_SIZE)..(self.len - HEADER_SIZE + bytes.len())].copy_from_slice(bytes);
     self.len += bytes.len();
   }
 
   pub fn as_bytes(&self) -> &[u8] {
     unsafe {
-      let len = HEADER_SIZE + self.len;
-      &(*(&self.header as *const _ as *const [u8; HEADER_SIZE + MAX_MESSAGE_SIZE] ))[..len]
+      &(*(&self.header as *const _ as *const [u8; HEADER_SIZE + MAX_MESSAGE_SIZE] ))[..self.len]
     }
   }
 
@@ -100,8 +99,8 @@ impl DnsFrame {
     Questions {
       question_count: self.header.question_count() as usize,
       current_question: 0,
-      buf: &self.body(),
-      buf_i: 0,
+      buf: &self.as_bytes(),
+      buf_i: HEADER_SIZE,
     }
   }
 }
