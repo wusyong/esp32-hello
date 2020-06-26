@@ -76,6 +76,7 @@ pub fn server() {
     let request = if let Ok(frame) = DnsFrame::parse(buf, len) {
       frame
     } else {
+      eprintln!("Failed to parse DNS request.");
       continue 'outer
     };
 
