@@ -128,8 +128,8 @@ pub async fn connect_ssid_password(wifi: Wifi, ap_config: ApConfig, ssid: Ssid, 
 
   match wifi.connect_sta(sta_config).await {
     Ok(sta) => {
-      if let WifiRunning::Sta(ref sta, ref ip_info) = sta {
-        eprintln!("Connected to '{}' with IP '{}'.", sta.config().ssid(), ip_info.ip());
+      if let WifiRunning::Sta(ref sta) = sta {
+        eprintln!("Connected to '{}' with IP '{}'.", sta.config().ssid(), sta.ip_info().ip());
       }
       sta
     },

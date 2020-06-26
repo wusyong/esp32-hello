@@ -233,6 +233,7 @@ impl From<AuthMode> for wifi_auth_mode_t {
 pub struct Wifi<T = ()> {
   config: T,
   deinit_on_drop: bool,
+  ip_info: Option<IpInfo>,
 }
 
 fn netif_init() {
@@ -287,7 +288,7 @@ impl Wifi {
       let config = wifi_init_config_t::default();
       esp_ok!(esp_wifi_init(&config)).expect("failed to initialize WiFi with default configuration");
 
-      Some(Wifi { config: (), deinit_on_drop: true })
+      Some(Wifi { config: (), deinit_on_drop: true, ip_info: None })
     }
   }
 
@@ -300,12 +301,13 @@ impl Wifi {
   pub fn start_ap(mut self, config: ApConfig) -> Result<WifiRunning, WifiError> {
     self.deinit_on_drop = false;
 
-    Interface::Ap.init();
+    let interface = Interface::Ap;
+    interface.init();
     let mut ap_config = wifi_config_t::from(&config);
     esp_ok!(esp_wifi_set_mode(wifi_mode_t::WIFI_MODE_AP))?;
     esp_ok!(esp_wifi_set_config(esp_interface_t::ESP_IF_WIFI_AP, &mut ap_config))?;
     esp_ok!(esp_wifi_start())?;
-    Ok(WifiRunning::Ap(Wifi { config, deinit_on_drop: true }))
+    Ok(WifiRunning::Ap(Wifi { config, deinit_on_drop: true, ip_info: Some(interface.ip_info()) }))
   }
 
   /// Connect to a WiFi network using the specified [`StaConfig`](struct.StaConfig.html).
@@ -331,8 +333,17 @@ impl Wifi {
 #[must_use = "WiFi will be stopped and deinitialized immediately. Drop it explicitly after you are done using it or create a named binding."]
 #[derive(Debug)]
 pub enum WifiRunning {
-  Sta(Wifi<StaConfig>, IpInfo),
+  Sta(Wifi<StaConfig>),
   Ap(Wifi<ApConfig>),
+}
+
+impl WifiRunning {
+  pub fn ip_info(&self) -> &IpInfo {
+    match self {
+      Self::Sta(wifi) => wifi.ip_info(),
+      Self::Ap(wifi) => wifi.ip_info(),
+    }
+  }
 }
 
 impl<T> Wifi<T> {
@@ -359,24 +370,32 @@ impl<T> Drop for Wifi<T> {
 }
 
 impl Wifi<StaConfig> {
+  pub fn ip_info(&self) -> &IpInfo {
+    self.ip_info.as_ref().unwrap()
+  }
+
   /// Stop a running WiFi in station mode.
   pub fn stop(mut self) -> (StaConfig, Wifi) {
     self.deinit_on_drop = false;
     esp_ok!(esp_wifi_stop()).unwrap(); // Can only fail when WiFi is not initialized.
     let config = MaybeUninit::uninit();
     let config = mem::replace(&mut self.config, unsafe { config.assume_init() });
-    (config, Wifi { config: (), deinit_on_drop: true })
+    (config, Wifi { config: (), deinit_on_drop: true, ip_info: None })
   }
 }
 
 impl Wifi<ApConfig> {
+  pub fn ip_info(&self) -> &IpInfo {
+    self.ip_info.as_ref().unwrap()
+  }
+
   /// Stop a running WiFi access point.
   pub fn stop(mut self) -> (ApConfig, Wifi) {
     self.deinit_on_drop = false;
     esp_ok!(esp_wifi_stop()).unwrap(); // Can only fail when WiFi is not initialized.
     let config = MaybeUninit::uninit();
     let config = mem::replace(&mut self.config, unsafe { config.assume_init() });
-    (config, Wifi { config: (), deinit_on_drop: true })
+    (config, Wifi { config: (), deinit_on_drop: true, ip_info: None })
   }
 }
 
@@ -422,7 +441,7 @@ pub enum WifiError {
 impl WifiError {
   /// Create a new uninitialized [`Wifi`](struct.Wifi.html) instance.
   pub fn wifi(self) -> Wifi {
-    Wifi { config: (), deinit_on_drop: true }
+    Wifi { config: (), deinit_on_drop: true, ip_info: None }
   }
 }
 
@@ -511,7 +530,7 @@ impl core::future::Future for ConnectFuture {
           ConnectFutureState::Connected { ref mut ip_info, .. } => {
             let ip_info = mem::replace(ip_info, unsafe { MaybeUninit::uninit().assume_init() });
             let config = mem::replace(&mut self.as_mut().config, unsafe { MaybeUninit::uninit().assume_init() });
-            Poll::Ready(Ok(WifiRunning::Sta(Wifi { config, deinit_on_drop: true }, ip_info)))
+            Poll::Ready(Ok(WifiRunning::Sta(Wifi { config, deinit_on_drop: true, ip_info: Some(ip_info) })))
           }
         }
       }

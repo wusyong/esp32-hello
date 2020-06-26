@@ -60,7 +60,7 @@ pub fn server() {
   let ip = *Interface::Ap.ip_info().ip();
   println!("IP: {:?}", ip);
 
-  'outer: loop {
+  loop {
     thread::yield_now();
 
     let mut buf = DnsFrame::BUFFER;
@@ -77,7 +77,7 @@ pub fn server() {
       frame
     } else {
       eprintln!("Failed to parse DNS request.");
-      continue 'outer
+      continue
     };
 
     let response = handle_request(request, &ip);
