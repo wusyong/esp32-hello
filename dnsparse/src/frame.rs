@@ -1,5 +1,5 @@
 use core::ops::Deref;
-use core::mem::{size_of, transmute};
+use core::mem::{replace, size_of, transmute};
 use core::fmt;
 
 use crate::{DnsHeader, Question, Questions};
@@ -17,11 +17,38 @@ pub struct DnsFrame<'a> {
   len: usize,
 }
 
+pub struct DnsFrameBuilder<'a> {
+  buf: &'a mut [u8],
+  len: usize,
+}
+
+impl<'a> DnsFrameBuilder<'a> {
+  pub fn header(mut self, header: DnsHeader) -> Self {
+    unsafe {
+      replace(self.header_mut(), header);
+    }
+
+    self.len = HEADER_SIZE;
+
+    self
+  }
+
+  fn header_mut(&mut self) -> &mut DnsHeader {
+    unsafe { &mut *(self.buf[..HEADER_SIZE].as_mut_ptr() as *mut _ as *mut DnsHeader) }
+  }
+
+  pub fn build(self) -> DnsFrame<'a> {
+    let Self { buf, len } = self;
+    DnsFrame { buf, len }
+  }
+}
+
 impl<'a> DnsFrame<'a> {
   pub const BUFFER: [u8; 512] = [0; 512];
 
-  pub fn new(buffer: &'a mut [u8]) -> DnsFrame<'a> {
-    Self { buf: buffer, len: HEADER_SIZE }
+  pub fn builder(buffer: &'a mut [u8]) -> DnsFrameBuilder<'a> {
+    let mut builder = DnsFrameBuilder { buf: buffer, len: HEADER_SIZE };
+    builder
   }
 
   pub fn parse(buffer: &'a mut [u8]) -> Result<DnsFrame<'a>, ()> {
@@ -66,11 +93,11 @@ impl Deref for DnsFrame<'_> {
 
 impl DnsFrame<'_> {
   pub fn header(&self) -> &DnsHeader {
-    unsafe { &*(self.buf.as_ptr() as *const _ as *const DnsHeader) }
+    unsafe { &*(self.buf[..HEADER_SIZE].as_ptr() as *const _ as *const DnsHeader) }
   }
 
   pub fn header_mut(&mut self) -> &mut DnsHeader {
-    unsafe { &mut *(self.buf.as_mut_ptr() as *mut _ as *mut DnsHeader) }
+    unsafe { &mut *(self.buf[..HEADER_SIZE].as_mut_ptr() as *mut _ as *mut DnsHeader) }
   }
 
   pub fn add_question(&mut self, question: &Question) {

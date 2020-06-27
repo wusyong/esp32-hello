@@ -16,12 +16,9 @@ pub fn handle_request(socket: &UdpSocket, src: SocketAddr, request: DnsFrame, ip
 
   let mut buf = DnsFrame::BUFFER;
 
-  let mut response = DnsFrame::new(&mut buf);
-
-  response.header_mut().set_id(request.header().id());
-  response.header_mut().set_kind(HeaderKind::Response);
-  response.header_mut().set_recursion_available(request.header().recursion_desired());
-  response.header_mut().set_response_code(ResponseCode::NotImplemented);
+  let mut response = DnsFrame::builder(&mut buf)
+    .header(response_header.build())
+    .build();
 
   let question_count = request.header().question_count();
   let kind = request.header().kind();
@@ -84,7 +81,7 @@ pub fn server() {
       }
     };
 
-    let request = if let Ok(frame) = DnsFrame::parse(&mut buf) {
+    let request = if let Ok(frame) = DnsFrame::parse(&mut buf[..len]) {
       frame
     } else {
       eprintln!("Failed to parse DNS request.");
