@@ -26,28 +26,21 @@ pub fn handle_request(socket: &UdpSocket, src: SocketAddr, request: DnsFrame, ip
 
   if question_count == 1 && kind == HeaderKind::Query && opcode == OpCode::Query {
     for question in request.questions() {
-      match question {
-        Ok(question) => {
-          if question.kind() == QueryKind::A && question.class() == QueryClass::IN {
-            if question.name() == "captive.apple.com" {
-              {
-                let header = response.header_mut();
-                header.set_response_code(ResponseCode::NoError);
-                header.set_answer_count(header.answer_count() + 1);
-              }
-
-              response.add_question(&question);
-              response.add_ttl(60);
-              response.add_rdata(&ip.octets());
-            } else {
-              response.header_mut().set_response_code(ResponseCode::NonExistentDomain);
-              break;
-            }
+      if question.kind() == QueryKind::A && question.class() == QueryClass::IN {
+        if question.name() == "captive.apple.com" {
+          {
+            let header = response.header_mut();
+            header.set_response_code(ResponseCode::NoError);
+            header.set_answer_count(header.answer_count() + 1);
           }
-        },
-        Err(response_code) => {
-          response.header_mut().set_response_code(response_code);
-        },
+
+          response.add_question(&question);
+          response.add_ttl(60);
+          response.add_rdata(&ip.octets());
+        } else {
+          response.header_mut().set_response_code(ResponseCode::NonExistentDomain);
+          break;
+        }
       }
     }
   }

@@ -2,7 +2,7 @@ use core::fmt;
 use core::mem::size_of;
 use core::str;
 
-use crate::{ResponseCode, QueryKind, QueryClass};
+use crate::{QueryKind, QueryClass};
 
 /// A DNS question.
 #[repr(C)]
@@ -89,7 +89,7 @@ impl PartialEq<&str> for QuestionName<'_> {
       }
 
       if len == 0 {
-        return true
+        return other_i == other.len()
       }
 
       if other_i != 0 {
@@ -103,7 +103,7 @@ impl PartialEq<&str> for QuestionName<'_> {
       i += 1;
 
       if let Some(substring) = other.get(other_i..(other_i + len)) {
-        if &self.buf[i..(i + len)] != substring {
+        if !self.buf[i..(i + len)].eq_ignore_ascii_case(substring) {
           return false
         }
       } else {
@@ -189,7 +189,7 @@ fn read_query_class_and_kind(buf: &[u8], i: &mut usize) -> bool {
 }
 
 impl<'a> Iterator for Questions<'a> {
-  type Item = Result<Question<'a>, ResponseCode>;
+  type Item = Question<'a>;
 
   fn next(&mut self) -> Option<Self::Item> {
     if self.current_question >= self.question_count {
@@ -198,17 +198,13 @@ impl<'a> Iterator for Questions<'a> {
 
     let mut i = self.buf_i;
 
-    if read_question(&self.buf, &mut i) {
-      let question = Question { buf: &self.buf, start: self.buf_i, end: i };
+    assert!(read_question(&self.buf, &mut i));
+    let question = Question { buf: &self.buf, start: self.buf_i, end: i };
 
-      self.current_question += 1;
-      self.buf_i = i;
+    self.current_question += 1;
+    self.buf_i = i;
 
-      return Some(Ok(question))
-    } else {
-      self.current_question = self.question_count;
-      Some(Err(ResponseCode::FormatError))
-    }
+    return Some(question)
   }
 }
 
