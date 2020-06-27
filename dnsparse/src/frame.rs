@@ -3,9 +3,10 @@ use core::mem::{size_of, transmute};
 use core::fmt;
 
 use crate::{DnsHeader, Question, Questions};
+use crate::question::read_question;
 
 const HEADER_SIZE: usize = size_of::<DnsHeader>();
-const MAX_MESSAGE_SIZE: usize = 512;
+const MAX_MESSAGE_SIZE: usize = 512 - HEADER_SIZE;
 
 pub type DnsFrameBuffer = [u8; size_of::<DnsFrame>()];
 
@@ -26,7 +27,17 @@ impl DnsFrame {
     }
 
     let mut frame: Self = unsafe { transmute(buffer) };
-    frame.len = len;
+    frame.len = HEADER_SIZE + MAX_MESSAGE_SIZE;
+
+    let mut i = HEADER_SIZE;
+
+    for _ in 0..frame.header().question_count() {
+      if !read_question(&frame.as_bytes(), &mut i) {
+        return Err(())
+      }
+    }
+
+    frame.len = i;
 
     Ok(frame)
   }

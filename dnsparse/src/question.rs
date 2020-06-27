@@ -146,7 +146,7 @@ pub struct Questions<'a> {
   pub(crate) buf_i: usize,
 }
 
-fn read_question(buf: &[u8], i: &mut usize) -> bool {
+pub(crate) fn read_question(buf: &[u8], i: &mut usize) -> bool {
   loop {
     match read_label(buf, i) {
       None => return false,
