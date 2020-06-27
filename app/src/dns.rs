@@ -1,4 +1,5 @@
-use std::net::{Ipv4Addr, UdpSocket};
+use std::io;
+use std::net::{Ipv4Addr, UdpSocket, SocketAddr};
 use std::time::Duration;
 use std::thread;
 
@@ -6,50 +7,55 @@ use esp_idf_hal::interface::Interface;
 
 use dnsparse::*;
 
-pub fn handle_request(request: DnsFrame, ip: &Ipv4Addr) -> DnsFrame {
+pub fn handle_request(socket: &UdpSocket, src: SocketAddr, request: DnsFrame, ip: &Ipv4Addr) -> io::Result<usize> {
   let response_header = DnsHeader::builder()
     .id(request.header().id())
     .kind(HeaderKind::Response)
     .recursion_available(request.header().recursion_desired())
     .response_code(ResponseCode::NotImplemented);
 
-  let mut response = DnsFrame::new(response_header.build());
+  let mut buf = DnsFrame::BUFFER;
+
+  let mut response = DnsFrame::new(&mut buf);
+
+  response.header_mut().set_id(request.header().id());
+  response.header_mut().set_kind(HeaderKind::Response);
+  response.header_mut().set_recursion_available(request.header().recursion_desired());
+  response.header_mut().set_response_code(ResponseCode::NotImplemented);
 
   let question_count = request.header().question_count();
   let kind = request.header().kind();
   let opcode = request.header().opcode();
 
-  if question_count != 1 || kind != HeaderKind::Query || opcode != OpCode::Query {
-    return response
-  }
+  if question_count == 1 && kind == HeaderKind::Query && opcode == OpCode::Query {
+    for question in request.questions() {
+      match question {
+        Ok(question) => {
+          if question.kind() == QueryKind::A && question.class() == QueryClass::IN {
+            if question.name() == "captive.apple.com" {
+              {
+                let header = response.header_mut();
+                header.set_response_code(ResponseCode::NoError);
+                header.set_answer_count(header.answer_count() + 1);
+              }
 
-  for question in request.questions() {
-    match question {
-      Ok(question) => {
-        if question.kind() == QueryKind::A && question.class() == QueryClass::IN {
-          if question.name() == "captive.apple.com" {
-            {
-              let header = response.header_mut();
-              header.set_response_code(ResponseCode::NoError);
-              header.set_answer_count(header.answer_count() + 1);
+              response.add_question(&question);
+              response.add_ttl(60);
+              response.add_rdata(&ip.octets());
+            } else {
+              response.header_mut().set_response_code(ResponseCode::NonExistentDomain);
+              break;
             }
-
-            response.add_question(&question);
-            response.add_ttl(60);
-            response.add_rdata(&ip.octets());
-          } else {
-            response.header_mut().set_response_code(ResponseCode::NonExistentDomain);
-            break;
           }
-        }
-      },
-      Err(response_code) => {
-        response.header_mut().set_response_code(response_code);
-      },
+        },
+        Err(response_code) => {
+          response.header_mut().set_response_code(response_code);
+        },
+      }
     }
   }
 
-  response
+  socket.send_to(&response, src)
 }
 
 
@@ -78,16 +84,14 @@ pub fn server() {
       }
     };
 
-    let request = if let Ok(frame) = DnsFrame::parse(buf, len) {
+    let request = if let Ok(frame) = DnsFrame::parse(&mut buf) {
       frame
     } else {
       eprintln!("Failed to parse DNS request.");
       continue
     };
 
-    let response = handle_request(request, &ip);
-
-    if let Err(err) = socket.send_to(&response, src) {
+    if let Err(err) = handle_request(&socket, src, request, &ip) {
       eprintln!("Error sending response to '{:?}': {}", src, err);
     }
   }

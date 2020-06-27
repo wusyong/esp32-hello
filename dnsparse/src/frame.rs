@@ -8,31 +8,34 @@ use crate::question::read_question;
 const HEADER_SIZE: usize = size_of::<DnsHeader>();
 const MAX_MESSAGE_SIZE: usize = 512 - HEADER_SIZE;
 
-pub type DnsFrameBuffer = [u8; size_of::<DnsFrame>()];
+pub type DnsFrameBuffer = [u8; HEADER_SIZE + MAX_MESSAGE_SIZE];
 
 /// A DNS frame.
 #[repr(C)]
-pub struct DnsFrame {
-  header: DnsHeader,
-  msg: [u8; MAX_MESSAGE_SIZE],
+pub struct DnsFrame<'a> {
+  buf: &'a mut [u8],
   len: usize,
 }
 
-impl DnsFrame {
-  pub const BUFFER: DnsFrameBuffer = [0; size_of::<DnsFrame>()];
+impl<'a> DnsFrame<'a> {
+  pub const BUFFER: [u8; 512] = [0; 512];
 
-  pub fn parse(buffer: DnsFrameBuffer, len: usize) -> Result<DnsFrame, ()> {
-    if len < HEADER_SIZE || len > HEADER_SIZE + MAX_MESSAGE_SIZE {
+  pub fn new(buffer: &'a mut [u8]) -> DnsFrame<'a> {
+    Self { buf: buffer, len: HEADER_SIZE }
+  }
+
+  pub fn parse(buffer: &'a mut [u8]) -> Result<DnsFrame<'a>, ()> {
+    if buffer.len() < HEADER_SIZE || buffer.len() > HEADER_SIZE + MAX_MESSAGE_SIZE {
       return Err(())
     }
 
-    let mut frame: Self = unsafe { transmute(buffer) };
-    frame.len = HEADER_SIZE + MAX_MESSAGE_SIZE;
+    let len = buffer.len();
+    let mut frame = Self { buf: buffer, len };
 
     let mut i = HEADER_SIZE;
 
     for _ in 0..frame.header().question_count() {
-      if !read_question(&frame.as_bytes(), &mut i) {
+      if !read_question(&frame.buf, &mut i) {
         return Err(())
       }
     }
@@ -43,17 +46,17 @@ impl DnsFrame {
   }
 }
 
-impl fmt::Debug for DnsFrame {
+impl fmt::Debug for DnsFrame<'_> {
   fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
     fmt.debug_struct("DnsFrame")
-      .field("header", &self.header)
-      .field("msg", &format_args!("{:?}", &self.msg[..]))
+      .field("header", &self.header())
+      .field("body", &format_args!("{:?}", &self.buf[HEADER_SIZE..]))
       .field("len", &self.len)
       .finish()
   }
 }
 
-impl Deref for DnsFrame {
+impl Deref for DnsFrame<'_> {
   type Target = [u8];
 
   fn deref(&self) -> &Self::Target {
@@ -61,25 +64,13 @@ impl Deref for DnsFrame {
   }
 }
 
-impl DnsFrame {
-  pub fn new(header: DnsHeader) -> Self {
-    Self {
-      header,
-      msg: [0; MAX_MESSAGE_SIZE],
-      len: HEADER_SIZE,
-    }
-  }
-
+impl DnsFrame<'_> {
   pub fn header(&self) -> &DnsHeader {
-    &self.header
+    unsafe { &*(self.buf.as_ptr() as *const _ as *const DnsHeader) }
   }
 
   pub fn header_mut(&mut self) -> &mut DnsHeader {
-    &mut self.header
-  }
-
-  pub fn body(&self) -> &[u8] {
-    &self.msg[..(self.len - HEADER_SIZE)]
+    unsafe { &mut *(self.buf.as_mut_ptr() as *mut _ as *mut DnsHeader) }
   }
 
   pub fn add_question(&mut self, question: &Question) {
@@ -96,19 +87,17 @@ impl DnsFrame {
   }
 
   fn extend(&mut self, bytes: &[u8]) {
-    self.msg[(self.len - HEADER_SIZE)..(self.len - HEADER_SIZE + bytes.len())].copy_from_slice(bytes);
+    self.buf[self.len..(self.len + bytes.len())].copy_from_slice(bytes);
     self.len += bytes.len();
   }
 
   pub fn as_bytes(&self) -> &[u8] {
-    unsafe {
-      &(*(&self.header as *const _ as *const [u8; HEADER_SIZE + MAX_MESSAGE_SIZE] ))[..self.len]
-    }
+    &self.buf[..self.len]
   }
 
   pub fn questions(&self) -> Questions {
     Questions {
-      question_count: self.header.question_count() as usize,
+      question_count: self.header().question_count() as usize,
       current_question: 0,
       buf: &self.as_bytes(),
       buf_i: HEADER_SIZE,
