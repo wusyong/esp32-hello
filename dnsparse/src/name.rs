@@ -9,14 +9,6 @@ pub struct Name<'a> {
   pub(crate) end: usize,
 }
 
-pub(crate) const fn is_pointer(len: u8) -> bool {
-  (len >> 6) == 0b11
-}
-
-pub(crate) const fn mask_len(len: u8) -> u8 {
-  len & 0b00111111
-}
-
 impl fmt::Display for Name<'_> {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     let mut i = self.start;
@@ -91,34 +83,34 @@ impl PartialEq<&str> for Name<'_> {
   }
 }
 
-pub(crate) enum Label {
+enum Label {
   Pointer(u16),
   Part(u8),
 }
 
-/// TODO:
-/// Verify [VU#23495](https://www.kb.cert.org/vuls/id/23495/)
-/// is fully prevented in this function.
+/// # TODO
+///
+/// Verify [CVE-2000-0333]/[VU#23495] is fully prevented in this function.
+///
+/// [CVE-2000-0333]: https://nvd.nist.gov/vuln/detail/CVE-2000-0333
+/// [VU#23495]: https://www.kb.cert.org/vuls/id/23495/
 pub(crate) fn read_name(buf: &[u8], i: &mut usize) -> bool {
-  let start = *i;
-  let mut previous_was_ptr = false;
+  let global_start = *i;
+
+  let mut iteration: u8 = 0;
   let mut len: u8 = 0;
 
   loop {
+    let local_start = *i;
+
     match read_label(buf, i) {
       None => return false,
       Some(Label::Pointer(ptr)) => {
         // Stop following self-referencing pointer.
-        if ptr as usize == start {
+        if ptr as usize == global_start || ptr as usize == local_start {
           return false
         }
 
-        // Stop following pointer to pointer.
-        if previous_was_ptr == true {
-          return false
-        }
-
-        previous_was_ptr = true;
         *i = ptr as usize;
       },
       Some(Label::Part(part_len)) => {
@@ -126,36 +118,42 @@ pub(crate) fn read_name(buf: &[u8], i: &mut usize) -> bool {
           return true
         }
 
-        previous_was_ptr = false;
-
-        // Maximum name length is 255 bytes, so stop if `u8` overflows.
+        // Stop if maximum name length of 255 bytes is reached.
         len = if let Some(len) = len.checked_add(part_len) {
           len
         } else {
           return false
-        }
+        };
       },
     }
+
+    // Stop after a maximum 255 iterations.
+    iteration = if let Some(iteration) = iteration.checked_add(1) {
+      iteration
+    } else {
+      return false
+    };
   }
 }
 
-// Return whether a label was read and whether it was the last label.
-pub(crate) fn read_label(buf: &[u8], i: &mut usize) -> Option<Label> {
-  if let Some(&pointer_or_len) = buf.get(*i) {
-    let len = mask_len(pointer_or_len);
+const PTR_MASK: u8 = 0b11000000;
+const LEN_MASK: u8 = !PTR_MASK;
 
+// Return whether a label was read and whether it was a pointer or a normal name part.
+fn read_label(buf: &[u8], i: &mut usize) -> Option<Label> {
+  if let Some(&ptr_or_len) = buf.get(*i) {
     // Check for pointer:
     // https://tools.ietf.org/rfc/rfc1035#section-4.1.4
-    if is_pointer(pointer_or_len) {
-      if let Some(&len2) = buf.get(*i + 1) {
+    if ptr_or_len & PTR_MASK == PTR_MASK {
+      if let Some(&ptr) = buf.get(*i + 1) {
         *i += 1 + 1;
-        Some(Label::Pointer(((len as u16) << 8) + len2 as u16))
+        Some(Label::Pointer(u16::from_be_bytes([ptr_or_len & LEN_MASK, ptr])))
       } else {
         None
       }
     } else {
-      *i += 1 + len as usize;
-      Some(Label::Part(len))
+      *i += 1 + (ptr_or_len & LEN_MASK) as usize;
+      Some(Label::Part(ptr_or_len & LEN_MASK))
     }
   } else {
     None
