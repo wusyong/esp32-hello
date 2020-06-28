@@ -2,88 +2,102 @@ use core::fmt;
 use core::str;
 
 /// A DNS name.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Name<'a> {
   pub(crate) buf: &'a [u8],
   pub(crate) start: usize,
-  pub(crate) end: usize,
+}
+
+impl<'a> Name<'a> {
+  pub(crate) fn labels(&self) -> Labels<'a> {
+    Labels {
+      buf: self.buf,
+      buf_i: self.start,
+    }
+  }
 }
 
 impl fmt::Display for Name<'_> {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    let mut i = self.start;
     let mut print_dot = false;
 
-    loop {
-      match read_label(self.buf, &mut i) {
-        None => return Err(fmt::Error),
-        Some(Label::Pointer(ptr)) => {
-          i = ptr as usize;
-          continue;
-        },
-        Some(Label::Part(len)) => {
-          if len == 0 {
-            return Ok(())
-          }
-
-          if print_dot {
-            '.'.fmt(f)?;
-          }
-
-          for &c in &self.buf[(i - len as usize)..i] {
-            (c as char).fmt(f)?;
-          }
-
-          print_dot = true;
-        },
+    for label in self.labels() {
+      if print_dot {
+        '.'.fmt(f)?;
       }
+
+      if let Ok(s) = str::from_utf8(label) {
+        s.fmt(f)?;
+      } else {
+        return Err(fmt::Error)
+      }
+
+      print_dot = true;
     }
+
+    Ok(())
   }
 }
 
-impl PartialEq<&str> for Name<'_> {
-  fn eq(&self, other: &&str) -> bool {
-    let mut i = self.start;
+impl PartialEq<str> for Name<'_> {
+  fn eq(&self, other: &str) -> bool {
     let mut other_i = 0;
 
     let other = other.as_bytes();
 
+    for label in self.labels() {
+      if other_i != 0 {
+        if other.get(other_i) != Some(&b'.') {
+          return false
+        } else {
+          other_i += 1;
+        }
+      }
+
+      if let Some(substring) = other.get(other_i..(other_i + label.len())) {
+        if !label.eq_ignore_ascii_case(substring) {
+          return false
+        }
+      } else {
+        return false
+      }
+
+      other_i += label.len();
+    }
+
+    other_i == other.len()
+  }
+}
+
+pub(crate) struct Labels<'a> {
+  buf: &'a [u8],
+  buf_i: usize,
+}
+
+impl<'a> Iterator for Labels<'a> {
+  type Item = &'a [u8];
+
+  fn next(&mut self) -> Option<Self::Item> {
     loop {
-      match read_label(self.buf, &mut i) {
-        None => return false,
+      match read_label(self.buf, &mut self.buf_i) {
+        None => return None,
         Some(Label::Pointer(ptr)) => {
-          i = ptr as usize;
+          self.buf_i = ptr as usize;
           continue;
         },
         Some(Label::Part(len)) => {
           if len == 0 {
-            return other_i == other.len()
+            return None
           }
 
-          if other_i != 0 {
-            if other.get(other_i) != Some(&b'.') {
-              return false
-            } else {
-              other_i += 1;
-            }
-          }
-
-          if let Some(substring) = other.get(other_i..(other_i + len as usize)) {
-            if !self.buf[(i - len as usize)..i].eq_ignore_ascii_case(substring) {
-              return false
-            }
-          } else {
-            return false
-          }
-
-          other_i += len as usize;
+          return Some(&self.buf[(self.buf_i - len as usize)..self.buf_i])
         },
       }
     }
   }
 }
 
-enum Label {
+pub(crate) enum Label {
   Pointer(u16),
   Part(u8),
 }

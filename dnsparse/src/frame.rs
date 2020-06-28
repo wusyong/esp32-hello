@@ -2,7 +2,7 @@ use core::ops::Deref;
 use core::mem::{size_of};
 use core::fmt;
 
-use crate::{DnsHeader, Question, Questions};
+use crate::{Answer, DnsHeader, Questions, QueryKind, QueryClass, Name};
 use crate::question::read_question;
 
 const HEADER_SIZE: usize = size_of::<DnsHeader>();
@@ -101,8 +101,28 @@ impl DnsFrame<'_> {
     unsafe { &mut *(self.buf[..HEADER_SIZE].as_mut_ptr() as *mut _ as *mut DnsHeader) }
   }
 
-  pub fn add_question(&mut self, question: &Question) {
-    self.extend(&question.as_bytes());
+  pub fn add_answer(&mut self, answer: &Answer<'_>) {
+    self.add_name(&answer.name);
+    self.add_kind(&answer.kind);
+    self.add_class(&answer.class);
+    self.add_ttl(answer.ttl);
+    self.add_rdata(answer.rdata);
+  }
+
+  pub fn add_name(&mut self, name: &Name<'_>) {
+    for label in name.labels() {
+      self.extend(&[label.len() as u8]);
+      self.extend(label);
+    }
+    self.extend(&[0]);
+  }
+
+  pub fn add_kind(&mut self, kind: &QueryKind) {
+    self.extend(&kind.to_be_bytes());
+  }
+
+  pub fn add_class(&mut self, class: &QueryClass) {
+    self.extend(&class.to_be_bytes());
   }
 
   pub fn add_ttl(&mut self, ttl: u32) {

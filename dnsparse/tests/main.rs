@@ -116,8 +116,8 @@ fn test_questions() {
   assert_ne!(question.name(), ".captive.apple.com");
   assert_ne!(question.name(), "captive.apple.com.");
   assert_ne!(question.name(), "captive-apple-com");
-  assert_eq!(question.class(), QueryClass::IN);
-  assert_eq!(question.kind(), QueryKind::A);
+  assert_eq!(*question.class(), QueryClass::IN);
+  assert_eq!(*question.kind(), QueryKind::A);
 
   assert_eq!(question.name().to_string(), "captive.apple.com".to_string());
 

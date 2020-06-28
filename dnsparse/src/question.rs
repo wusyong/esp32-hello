@@ -7,9 +7,9 @@ use crate::name::read_name;
 /// A DNS question.
 #[repr(C)]
 pub struct Question<'a> {
-  buf: &'a [u8],
-  start: usize,
-  end: usize,
+  name: Name<'a>,
+  kind: QueryKind,
+  class: QueryClass,
 }
 
 impl fmt::Debug for Question<'_> {
@@ -23,24 +23,16 @@ impl fmt::Debug for Question<'_> {
 }
 
 impl<'a> Question<'a> {
-  pub fn name(&self) -> Name<'a> {
-    Name { buf: self.buf, start: self.start, end: self.end - 5 }
+  pub fn name(&self) -> &Name<'a> {
+    &self.name
   }
 
-  pub fn kind(&self) -> QueryKind {
-    let b0 = self.end - 4;
-    let b1 = b0 + 1;
-    QueryKind::from(u16::from_be_bytes([self.buf[b0], self.buf[b1]]))
+  pub fn kind(&self) -> &QueryKind {
+    &self.kind
   }
 
-  pub fn class(&self) -> QueryClass {
-    let b0 = self.end - 2;
-    let b1 = b0 + 1;
-    QueryClass::from(u16::from_be_bytes([self.buf[b0], self.buf[b1]]))
-  }
-
-  pub fn as_bytes(&self) -> &'a [u8] {
-    &self.buf[self.start..self.end]
+  pub fn class(&self) -> &QueryClass {
+    &self.class
   }
 }
 
@@ -80,8 +72,16 @@ impl<'a> Iterator for Questions<'a> {
 
     let mut i = self.buf_i;
 
+
     assert!(read_question(&self.buf, &mut i));
-    let question = Question { buf: &self.buf, start: self.buf_i, end: i };
+    let question = Question {
+      name: Name {
+        buf: &self.buf,
+        start: self.buf_i,
+      },
+      kind: QueryKind::from(u16::from_be_bytes([self.buf[i - 4], self.buf[i - 3]])),
+      class: QueryClass::from(u16::from_be_bytes([self.buf[i - 2], self.buf[i - 1]])),
+    };
 
     self.current_question += 1;
     self.buf_i = i;
