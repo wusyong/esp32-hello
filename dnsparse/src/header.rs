@@ -1,5 +1,4 @@
 use core::fmt;
-use core::mem::size_of;
 
 /// A DNS header.
 #[derive(Clone)]
@@ -351,11 +350,6 @@ impl DnsHeader {
   #[inline]
   pub fn set_additional_records_count(&mut self, additional_records_count: u16) {
     self.additional_records_count = additional_records_count.to_be_bytes();
-  }
-
-  #[inline]
-  pub fn as_bytes(&self) -> &[u8] {
-    unsafe { &*(self as *const _ as *const [u8; size_of::<Self>()]) }
   }
 
   #[inline]
