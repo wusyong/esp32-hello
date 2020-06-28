@@ -96,16 +96,43 @@ pub(crate) enum Label {
   Part(u8),
 }
 
+/// TODO:
+/// Verify [VU#23495](https://www.kb.cert.org/vuls/id/23495/)
+/// is fully prevented in this function.
 pub(crate) fn read_name(buf: &[u8], i: &mut usize) -> bool {
+  let start = *i;
+  let mut previous_was_ptr = false;
+  let mut len: u8 = 0;
+
   loop {
     match read_label(buf, i) {
       None => return false,
       Some(Label::Pointer(ptr)) => {
-        return read_name(buf, &mut (ptr as usize));
+        // Stop following self-referencing pointer.
+        if ptr as usize == start {
+          return false
+        }
+
+        // Stop following pointer to pointer.
+        if previous_was_ptr == true {
+          return false
+        }
+
+        previous_was_ptr = true;
+        *i = ptr as usize;
       },
-      Some(Label::Part(len)) => {
-        if len == 0 {
+      Some(Label::Part(part_len)) => {
+        if part_len == 0 {
           return true
+        }
+
+        previous_was_ptr = false;
+
+        // Maximum name length is 255 bytes, so stop if `u8` overflows.
+        len = if let Some(len) = len.checked_add(part_len) {
+          len
+        } else {
+          return false
         }
       },
     }
