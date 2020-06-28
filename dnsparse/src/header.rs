@@ -318,7 +318,7 @@ impl DnsHeader {
   }
 
   #[inline]
-  pub fn set_question_count(&mut self, question_count: u16) {
+  pub unsafe fn set_question_count(&mut self, question_count: u16) {
     self.question_count = question_count.to_be_bytes();
   }
 
@@ -328,7 +328,7 @@ impl DnsHeader {
   }
 
   #[inline]
-  pub fn set_answer_count(&mut self, answer_count: u16) {
+  pub unsafe fn set_answer_count(&mut self, answer_count: u16) {
     self.answer_count = answer_count.to_be_bytes();
   }
 
@@ -338,7 +338,7 @@ impl DnsHeader {
   }
 
   #[inline]
-  pub fn set_name_server_count(&mut self, name_server_count: u16) {
+  pub unsafe fn set_name_server_count(&mut self, name_server_count: u16) {
     self.name_server_count = name_server_count.to_be_bytes();
   }
 
@@ -348,7 +348,7 @@ impl DnsHeader {
   }
 
   #[inline]
-  pub fn set_additional_records_count(&mut self, additional_records_count: u16) {
+  pub unsafe fn set_additional_records_count(&mut self, additional_records_count: u16) {
     self.additional_records_count = additional_records_count.to_be_bytes();
   }
 
@@ -381,6 +381,11 @@ impl DnsHeaderBuilder {
 
   pub fn kind(mut self, kind: HeaderKind) -> Self {
     self.0.set_kind(kind);
+    self
+  }
+
+  pub fn recursion_desired(mut self, recursion_desired: bool) -> Self {
+    self.0.set_recursion_desired(recursion_desired);
     self
   }
 

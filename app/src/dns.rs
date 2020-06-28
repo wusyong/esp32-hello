@@ -11,7 +11,7 @@ pub fn handle_request(socket: &UdpSocket, src: SocketAddr, request: DnsFrame, ip
   let response_header = DnsHeader::builder()
     .id(request.header().id())
     .kind(HeaderKind::Response)
-    .recursion_available(request.header().recursion_desired())
+    .recursion_desired(request.header().recursion_desired())
     .response_code(ResponseCode::NotImplemented);
 
   let mut buf = DnsFrame::BUFFER;

@@ -109,7 +109,7 @@ impl DnsFrame<'_> {
     self.add_rdata(answer.rdata);
 
     let header = self.header_mut();
-    header.set_answer_count(header.answer_count() + 1);
+    unsafe { header.set_answer_count(header.answer_count() + 1) };
   }
 
   fn add_name(&mut self, name: &Name<'_>) {
