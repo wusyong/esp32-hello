@@ -9,4 +9,7 @@ mod header;
 pub use header::{DnsHeader, HeaderKind, ResponseCode, OpCode, QueryKind, QueryClass};
 
 mod question;
-pub use question::{Question, QuestionName, Questions};
+pub use question::{Question, Questions};
+
+mod name;
+pub use name::Name;

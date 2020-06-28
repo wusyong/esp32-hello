@@ -1,8 +1,8 @@
 use core::fmt;
 use core::mem::size_of;
-use core::str;
 
-use crate::{QueryKind, QueryClass};
+use crate::{Name, QueryKind, QueryClass};
+use crate::name::read_name;
 
 /// A DNS question.
 #[repr(C)]
@@ -22,103 +22,9 @@ impl fmt::Debug for Question<'_> {
   }
 }
 
-/// A DNS question name.
-#[derive(Debug)]
-pub struct QuestionName<'a> {
-  buf: &'a [u8],
-  start: usize,
-  end: usize,
-}
-
-const fn is_pointer(len: u8) -> bool {
-  (len >> 6) == 0b11
-}
-
-const fn mask_len(len: u8) -> usize {
-  (len & 0b00111111) as usize
-}
-
-impl fmt::Display for QuestionName<'_> {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    let mut i = self.start;
-
-    loop {
-      let pointer_or_len = self.buf[i];
-
-      let len = mask_len(pointer_or_len);
-
-      if is_pointer(pointer_or_len) {
-        i = (len << 8) + self.buf[i + 1] as usize;
-        continue;
-      }
-
-      if len == 0 {
-        return Ok(())
-      }
-
-      if i != self.start {
-        ".".fmt(f)?;
-      }
-
-      i += 1;
-
-      let s = unsafe { str::from_utf8_unchecked(&self.buf[i..(i + len)]) };
-
-      s.fmt(f)?;
-
-      i += len;
-    }
-  }
-}
-
-impl PartialEq<&str> for QuestionName<'_> {
-  fn eq(&self, other: &&str) -> bool {
-    let mut i = self.start;
-    let mut other_i = 0;
-
-    let other = other.as_bytes();
-
-    loop {
-      let pointer_or_len = self.buf[i];
-
-      let len = mask_len(pointer_or_len);
-
-      if is_pointer(pointer_or_len) {
-        i = (len << 8) + self.buf[i + 1] as usize;
-        continue;
-      }
-
-      if len == 0 {
-        return other_i == other.len()
-      }
-
-      if other_i != 0 {
-        if other.get(other_i) != Some(&b'.') {
-          return false
-        } else {
-          other_i += 1;
-        }
-      }
-
-      i += 1;
-
-      if let Some(substring) = other.get(other_i..(other_i + len)) {
-        if !self.buf[i..(i + len)].eq_ignore_ascii_case(substring) {
-          return false
-        }
-      } else {
-        return false
-      }
-
-      i += len;
-      other_i += len;
-    }
-  }
-}
-
 impl<'a> Question<'a> {
-  pub fn name(&self) -> QuestionName<'a> {
-    QuestionName { buf: self.buf, start: self.start, end: self.end - 5 }
+  pub fn name(&self) -> Name<'a> {
+    Name { buf: self.buf, start: self.start, end: self.end - 5 }
   }
 
   pub fn kind(&self) -> QueryKind {
@@ -147,34 +53,10 @@ pub struct Questions<'a> {
 }
 
 pub(crate) fn read_question(buf: &[u8], i: &mut usize) -> bool {
-  loop {
-    match read_label(buf, i) {
-      None => return false,
-      Some(false) => continue,
-      Some(true) => return read_query_class_and_kind(buf, i),
-    }
-  }
-}
-
-// Return whether a label was read and whether it was the last label.
-fn read_label(buf: &[u8], i: &mut usize) -> Option<bool> {
-  if let Some(&pointer_or_len) = buf.get(*i) {
-    // Check for pointer:
-    // https://tools.ietf.org/rfc/rfc1035#section-4.1.4
-    if is_pointer(pointer_or_len) {
-      if *i + 1 + 1 < buf.len() {
-        *i += 1 + 1;
-        Some(true)
-      } else {
-        None
-      }
-    } else {
-      let part_len = mask_len(pointer_or_len);
-      *i += 1 + part_len;
-      Some(part_len == 0)
-    }
+  if read_name(buf, i) {
+    read_query_class_and_kind(buf, i)
   } else {
-    None
+    false
   }
 }
 

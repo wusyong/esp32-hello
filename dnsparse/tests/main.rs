@@ -119,6 +119,8 @@ fn test_questions() {
   assert_eq!(question.class(), QueryClass::IN);
   assert_eq!(question.kind(), QueryKind::A);
 
+  assert_eq!(question.name().to_string(), "captive.apple.com".to_string());
+
   assert!(questions.next().is_none());
 }
 
