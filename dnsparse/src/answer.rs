@@ -7,3 +7,25 @@ pub struct Answer<'a> {
   pub ttl: u32,
   pub rdata: &'a [u8],
 }
+
+impl<'a> Answer<'a> {
+  pub fn name(&self) -> &Name<'a> {
+    &self.name
+  }
+
+  pub fn kind(&self) -> &QueryKind {
+    &self.kind
+  }
+
+  pub fn class(&self) -> &QueryClass {
+    &self.class
+  }
+
+  pub fn ttl(&self) -> u32 {
+    self.ttl
+  }
+
+  pub fn rdata(&self) -> &'a [u8] {
+    &self.rdata
+  }
+}

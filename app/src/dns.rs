@@ -28,11 +28,7 @@ pub fn handle_request(socket: &UdpSocket, src: SocketAddr, request: DnsFrame, ip
     for question in request.questions() {
       if *question.kind() == QueryKind::A && *question.class() == QueryClass::IN {
         if question.name() == "captive.apple.com" {
-          {
-            let header = response.header_mut();
-            header.set_response_code(ResponseCode::NoError);
-            header.set_answer_count(header.answer_count() + 1);
-          }
+          response.header_mut().set_response_code(ResponseCode::NoError);
 
           let answer = Answer {
             name: question.name().clone(),
@@ -43,12 +39,6 @@ pub fn handle_request(socket: &UdpSocket, src: SocketAddr, request: DnsFrame, ip
           };
 
           response.add_answer(&answer);
-
-          // response.add_name(question.name());
-          // response.add_kind(question.kind());
-          // response.add_class(question.class());
-          // response.add_ttl(60);
-          // response.add_rdata(&ip.octets());
         } else {
           response.header_mut().set_response_code(ResponseCode::NonExistentDomain);
           break;

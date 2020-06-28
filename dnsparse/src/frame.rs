@@ -107,9 +107,12 @@ impl DnsFrame<'_> {
     self.add_class(&answer.class);
     self.add_ttl(answer.ttl);
     self.add_rdata(answer.rdata);
+
+    let header = self.header_mut();
+    header.set_answer_count(header.answer_count() + 1);
   }
 
-  pub fn add_name(&mut self, name: &Name<'_>) {
+  fn add_name(&mut self, name: &Name<'_>) {
     for label in name.labels() {
       self.extend(&[label.len() as u8]);
       self.extend(label);
@@ -117,19 +120,19 @@ impl DnsFrame<'_> {
     self.extend(&[0]);
   }
 
-  pub fn add_kind(&mut self, kind: &QueryKind) {
+  fn add_kind(&mut self, kind: &QueryKind) {
     self.extend(&kind.to_be_bytes());
   }
 
-  pub fn add_class(&mut self, class: &QueryClass) {
+  fn add_class(&mut self, class: &QueryClass) {
     self.extend(&class.to_be_bytes());
   }
 
-  pub fn add_ttl(&mut self, ttl: u32) {
+  fn add_ttl(&mut self, ttl: u32) {
     self.extend(&ttl.to_be_bytes());
   }
 
-  pub fn add_rdata(&mut self, data: &[u8]) {
+  fn add_rdata(&mut self, data: &[u8]) {
     self.extend(&(data.len() as u16).to_be_bytes());
     self.extend(data);
   }
