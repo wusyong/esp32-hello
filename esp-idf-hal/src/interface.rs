@@ -3,11 +3,11 @@ use std::net::Ipv4Addr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::ptr;
 
-use esp_idf_bindgen::{esp_mac_type_t, esp_read_mac, esp_netif_t, esp_netif_create_default_wifi_ap, esp_netif_create_default_wifi_sta};
+use esp_idf_bindgen::{esp_mac_type_t, esp_read_mac};
 #[cfg(target_device = "esp8266")]
 use esp_idf_bindgen::{tcpip_adapter_get_ip_info, tcpip_adapter_if_t, tcpip_adapter_ip_info_t as ip_info_t};
 #[cfg(target_device = "esp32")]
-use esp_idf_bindgen::{esp_netif_get_ip_info, esp_netif_ip_info_t as ip_info_t};
+use esp_idf_bindgen::{esp_netif_get_ip_info, esp_netif_ip_info_t as ip_info_t, esp_netif_t, esp_netif_create_default_wifi_ap, esp_netif_create_default_wifi_sta};
 use macaddr::{MacAddr, MacAddr6};
 
 static AP_PTR: AtomicUsize = AtomicUsize::new(0);
@@ -21,11 +21,11 @@ pub enum Interface {
   Sta,
   /// WiFi interface in access point mode.
   Ap,
-  #[cfg(not(target_device = "esp8266"))]
   /// Bluetooth interface.
+  #[cfg(target_device = "esp32")]
   Bt,
   /// Ethernet interface.
-  #[cfg(not(target_device = "esp8266"))]
+  #[cfg(target_device = "esp32")]
   Eth,
 }
 
@@ -35,8 +35,6 @@ impl Interface {
     let interface = match self {
       Self::Ap => tcpip_adapter_if_t::TCPIP_ADAPTER_IF_AP,
       Self::Sta => tcpip_adapter_if_t::TCPIP_ADAPTER_IF_STA,
-      Self::Eth => tcpip_adapter_if_t::TCPIP_ADAPTER_IF_ETH,
-      _ => unimplemented!(),
     };
 
     let mut ip_info = MaybeUninit::<ip_info_t>::uninit();
@@ -45,6 +43,10 @@ impl Interface {
   }
 
 
+  #[cfg(target_device = "esp8266")]
+  pub(crate) fn init(&self) {
+  }
+
   #[cfg(target_device = "esp32")]
   pub fn ip_info(&self) -> IpInfo {
     let mut ip_info = MaybeUninit::<ip_info_t>::uninit();
@@ -52,6 +54,7 @@ impl Interface {
     unsafe { IpInfo::from_native_unchecked(ip_info.assume_init()) }
   }
 
+  #[cfg(target_device = "esp32")]
   fn ptr(&self) -> *mut esp_netif_t {
     match self {
       Self::Ap => {
@@ -84,6 +87,7 @@ impl Interface {
     }
   }
 
+  #[cfg(target_device = "esp32")]
   pub(crate) fn init(&self) {
     self.ptr();
   }
@@ -100,9 +104,9 @@ impl From<Interface> for MacAddr6 {
     let mac_address_type = match interface {
       Interface::Sta => esp_mac_type_t::ESP_MAC_WIFI_STA,
       Interface::Ap  => esp_mac_type_t::ESP_MAC_WIFI_SOFTAP,
-      #[cfg(not(target_device = "esp8266"))]
+      #[cfg(target_device = "esp32")]
       Interface::Bt  => esp_mac_type_t::ESP_MAC_BT,
-      #[cfg(not(target_device = "esp8266"))]
+      #[cfg(target_device = "esp32")]
       Interface::Eth => esp_mac_type_t::ESP_MAC_ETH,
     };
 

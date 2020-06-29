@@ -236,7 +236,13 @@ pub struct Wifi<T = ()> {
   ip_info: Option<IpInfo>,
 }
 
-fn netif_init() {
+#[cfg(target_device = "esp8266")]
+fn initialize_network_interface() {
+  unsafe { tcpip_adapter_init() };
+}
+
+#[cfg(target_device = "esp32")]
+fn initialize_network_interface() {
   static NETIF_STATE: AtomicU8 = AtomicU8::new(0);
 
   loop {
@@ -276,11 +282,7 @@ impl Wifi {
     if WIFI_ACTIVE.compare_and_swap(false, true, Ordering::SeqCst) {
       None
     } else {
-      #[cfg(target_device = "esp8266")]
-      unsafe { tcpip_adapter_init() };
-
-      #[cfg(target_device = "esp32")]
-      netif_init();
+      initialize_network_interface();
 
       event_loop_create_default();
 
