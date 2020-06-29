@@ -61,6 +61,12 @@ export IDF_TOOLS_PATH
 
 mkdir -p "${IDF_TOOLS_PATH}"
 
+if [[ "${CHIP}" = 'esp32' ]]; then
+  ln -sfn sdkconfig.esp32 app/sdkconfig
+else
+  ln -sfn sdkconfig.esp8266 app/sdkconfig
+fi
+
 cross build ${PROFILE:+"--${PROFILE}"} --target "${TARGET}" ${PACKAGE:+--package "${PACKAGE}"} ${EXAMPLE:+--example "${EXAMPLE}"}
 
 cross doc ${PROFILE:+"--${PROFILE}"} --target "${TARGET}" --no-deps
