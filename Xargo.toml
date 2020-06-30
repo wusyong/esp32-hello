@@ -3,3 +3,4 @@ std = {}
 
 [patch.crates-io]
 compiler_builtins = { git = "https://github.com/reitermarkus/compiler-builtins", branch = "xtensa-support" }
+libc = { git = "https://github.com/reitermarkus/libc", branch = "xtensa-support-master" }
