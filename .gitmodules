@@ -2,13 +2,11 @@
   path = ESP8266_RTOS_SDK
   url = https://github.com/espressif/ESP8266_RTOS_SDK.git
   branch = release/v3.3
-  shallow = true
 
 [submodule "esp-idf"]
   path = esp-idf
   url = https://github.com/espressif/esp-idf.git
   branch = release/v4.2
-  shallow = true
 
 [submodule "esp-idf-bindgen"]
   path = esp-idf-bindgen
