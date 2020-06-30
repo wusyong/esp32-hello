@@ -9,9 +9,9 @@ fn main() -> Result<(), Box<dyn Error>> {
   println!("cargo:rerun-if-changed=partitions.csv");
   println!("cargo:rerun-if-changed=sdkconfig");
 
-  let target_dir = PathBuf::from(env::var("CARGO_TARGET_DIR")?);
+  let target_dir = PathBuf::from(env::var("CARGO_TARGET_DIR").expect("CARGO_TARGET_DIR is unset"));
 
-  let idf_path = PathBuf::from(env::var("IDF_PATH")?);
+  let idf_path = PathBuf::from(env::var("IDF_PATH").expect("IDF_PATH is unset"));
   let idf_link = target_dir.join("esp-idf");
 
   let create_idf_symlink = || symlink(&idf_path, &idf_link);
