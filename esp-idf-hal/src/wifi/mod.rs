@@ -190,6 +190,8 @@ pub enum AuthMode {
   WpaWpa2Psk,
   Wpa2Psk,
   #[cfg(target_device = "esp32")]
+  Wpa2Wpa3Psk,
+  #[cfg(target_device = "esp32")]
   Wpa3Psk,
   Wpa2Enterprise,
   Max,
@@ -203,6 +205,8 @@ impl From<wifi_auth_mode_t> for AuthMode {
       wifi_auth_mode_t::WIFI_AUTH_WPA_PSK => AuthMode::WpaPsk,
       wifi_auth_mode_t::WIFI_AUTH_WPA_WPA2_PSK => AuthMode::WpaWpa2Psk,
       wifi_auth_mode_t::WIFI_AUTH_WPA2_PSK => AuthMode::Wpa2Psk,
+      #[cfg(target_device = "esp32")]
+      wifi_auth_mode_t::WIFI_AUTH_WPA2_WPA3_PSK => AuthMode::Wpa2Wpa3Psk,
       #[cfg(target_device = "esp32")]
       wifi_auth_mode_t::WIFI_AUTH_WPA3_PSK => AuthMode::Wpa3Psk,
       wifi_auth_mode_t::WIFI_AUTH_WPA2_ENTERPRISE => AuthMode::Wpa2Enterprise,
@@ -219,6 +223,8 @@ impl From<AuthMode> for wifi_auth_mode_t {
       AuthMode::WpaPsk => wifi_auth_mode_t::WIFI_AUTH_WPA_PSK,
       AuthMode::WpaWpa2Psk => wifi_auth_mode_t::WIFI_AUTH_WPA_WPA2_PSK,
       AuthMode::Wpa2Psk => wifi_auth_mode_t::WIFI_AUTH_WPA2_PSK,
+      #[cfg(target_device = "esp32")]
+      AuthMode::Wpa2Wpa3Psk => wifi_auth_mode_t::WIFI_AUTH_WPA2_WPA3_PSK,
       #[cfg(target_device = "esp32")]
       AuthMode::Wpa3Psk => wifi_auth_mode_t::WIFI_AUTH_WPA3_PSK,
       AuthMode::Wpa2Enterprise => wifi_auth_mode_t::WIFI_AUTH_WPA2_ENTERPRISE,

@@ -110,6 +110,7 @@ rustflags = [
   "-C", "link-arg=-Ltarget/xtensa-esp32-none-elf/esp-build/esp_common",         "-C", "link-arg=-lesp_common",
   "-C", "link-arg=-Ltarget/xtensa-esp32-none-elf/esp-build/esp_eth",            "-C", "link-arg=-lesp_eth",
   "-C", "link-arg=-Ltarget/xtensa-esp32-none-elf/esp-build/esp_event",          "-C", "link-arg=-lesp_event",
+  "-C", "link-arg=-Ltarget/xtensa-esp32-none-elf/esp-build/esp_ipc",            "-C", "link-arg=-lesp_ipc",
   "-C", "link-arg=-Ltarget/xtensa-esp32-none-elf/esp-build/esp_netif",          "-C", "link-arg=-lesp_netif",
   "-C", "link-arg=-Ltarget/xtensa-esp32-none-elf/esp-build/esp_ringbuf",        "-C", "link-arg=-lesp_ringbuf",
   "-C", "link-arg=-Ltarget/xtensa-esp32-none-elf/esp-build/esp_rom",            "-C", "link-arg=-lesp_rom",
