@@ -11,11 +11,7 @@ use esp_idf_bindgen::{
   esp_wifi_scan_start,
   esp_wifi_scan_get_ap_num,
   esp_wifi_scan_get_ap_records,
-  esp_wifi_set_mode,
-  esp_wifi_start,
-  esp_wifi_stop,
   wifi_ap_record_t,
-  wifi_mode_t,
   wifi_scan_config_t,
   wifi_scan_time_t,
   wifi_active_scan_time_t,
@@ -151,9 +147,7 @@ impl ScanFuture {
   pub(crate) fn new(config: &ScanConfig) -> Self {
     let mut state = Box::pin(ScanFutureState::Starting(ptr::null()));
 
-    if let Err(err) = esp_ok!(esp_wifi_set_mode(wifi_mode_t::WIFI_MODE_STA)) {
-      return Self { state: Box::pin(ScanFutureState::Failed(err.into())) };
-    }
+    enter_sta_mode();
 
     if let Err(err) = esp_ok!(esp_wifi_start()) {
       return Self { state: Box::pin(ScanFutureState::Failed(err.into())) };
@@ -229,16 +223,16 @@ impl Future for ScanFuture {
         Poll::Pending
       },
       ScanFutureState::Failed(ref mut err) => {
+        leave_sta_mode();
         Poll::Ready(Err(mem::replace(err, unsafe { MaybeUninit::uninit().assume_init() })))
       },
       ScanFutureState::Done => {
         let unregister = unregister_scan_done_handler();
         let aps = get_ap_records();
-        let stop = esp_ok!(esp_wifi_stop());
+        leave_sta_mode();
 
         unregister?;
         let aps = aps?;
-        stop?;
 
         Poll::Ready(Ok(aps))
       }
