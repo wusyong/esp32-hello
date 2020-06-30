@@ -5,18 +5,18 @@ use std::thread;
 
 use esp_idf_hal::interface::Interface;
 
-use dnsparse::*;
+use dnsparse::{Header, HeaderKind, Answer, QueryKind, QueryClass, Message, OpCode, ResponseCode};
 
-pub fn handle_request(socket: &UdpSocket, src: SocketAddr, request: DnsFrame, ip: &Ipv4Addr) -> io::Result<usize> {
-  let response_header = DnsHeader::builder()
+pub fn handle_request(socket: &UdpSocket, src: SocketAddr, request: Message, ip: &Ipv4Addr) -> io::Result<usize> {
+  let response_header = Header::builder()
     .id(request.header().id())
     .kind(HeaderKind::Response)
     .recursion_desired(request.header().recursion_desired())
     .response_code(ResponseCode::NotImplemented);
 
-  let mut buf = DnsFrame::BUFFER;
+  let mut buf = Message::BUFFER;
 
-  let mut response = DnsFrame::builder(&mut buf)
+  let mut response = Message::builder(&mut buf)
     .header(response_header.build())
     .build();
 
@@ -64,7 +64,7 @@ pub fn server() {
   loop {
     thread::yield_now();
 
-    let mut buf = DnsFrame::BUFFER;
+    let mut buf = Message::BUFFER;
 
     let (len, src) = match socket.recv_from(&mut buf) {
       Ok(ok) => ok,
@@ -76,7 +76,7 @@ pub fn server() {
       }
     };
 
-    let request = if let Ok(frame) = DnsFrame::parse(&mut buf[..len]) {
+    let request = if let Ok(frame) = Message::parse(&mut buf[..len]) {
       frame
     } else {
       eprintln!("Failed to parse DNS request.");

@@ -1,6 +1,5 @@
 [workspace]
 members = [
-  "dnsparse",
   "esp-idf-bindgen",
   "esp-idf-hal",
   "app",
