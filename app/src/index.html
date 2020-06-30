@@ -90,8 +90,8 @@
   </head>
   <body>
     <form action='/connect' method='post'>
-      <input name='ssid' type='text' maxlength='31' placeholder='SSID'>
-      <input id='password' name='password' type='password' maxlength='63' placeholder='Password'>
+      <input name='ssid' type='text' maxlength='32' placeholder='SSID' list='ssids'/>
+      <input id='password' name='password' type='password' maxlength='64' placeholder='Password'>
       <input id='show-password' type='checkbox' onclick='showPassword(this)'> <label for='show-password'>Show Password</label>
       <input type='submit' value='Connect'>
     </form>

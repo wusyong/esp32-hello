@@ -1,11 +1,12 @@
 use core::mem::transmute;
 use std::str::{self, FromStr, Utf8Error};
+use std::ops::Deref;
+use std::cmp::{Eq, Ord, Ordering};
 use core::ptr;
 use std::mem::{self, MaybeUninit};
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering::SeqCst};
 use core::task::{Poll, Context, Waker};
 use core::pin::Pin;
-
 use alloc::boxed::Box;
 
 use core::fmt;
@@ -56,7 +57,36 @@ pub struct Ssid {
   ssid_len: usize,
 }
 
+impl Deref for Ssid {
+  type Target = str;
+
+  fn deref(&self) -> &Self::Target {
+    self.as_str()
+  }
+}
+
+impl PartialEq for Ssid {
+  fn eq(&self, other: &Self) -> bool {
+    self.as_str() == other.as_str()
+  }
+}
+
+impl Eq for Ssid {}
+
+impl Ord for Ssid {
+  fn cmp(&self, other: &Self) -> Ordering {
+    self.as_str().cmp(&other.as_str())
+  }
+}
+
+impl PartialOrd for Ssid {
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    Some(self.cmp(other))
+  }
+}
+
 impl Ssid {
+  #[inline]
   pub fn as_str(&self) -> &str {
     &unsafe { str::from_utf8_unchecked(&self.ssid[..self.ssid_len]) }
   }
@@ -252,10 +282,10 @@ fn initialize_network_interface() {
   static NETIF_STATE: AtomicU8 = AtomicU8::new(0);
 
   loop {
-    match NETIF_STATE.compare_and_swap(0, 1, Ordering::SeqCst) {
+    match NETIF_STATE.compare_and_swap(0, 1, SeqCst) {
       0 => {
         esp_ok!(esp_netif_init()).expect("failed to initialize network interface");
-        NETIF_STATE.store(2, Ordering::SeqCst);
+        NETIF_STATE.store(2, SeqCst);
         return;
       },
       1 => continue,
@@ -268,10 +298,10 @@ fn event_loop_create_default() {
   static EVENT_LOOP_STATE: AtomicU8 = AtomicU8::new(0);
 
   loop {
-    match EVENT_LOOP_STATE.compare_and_swap(0, 1, Ordering::SeqCst) {
+    match EVENT_LOOP_STATE.compare_and_swap(0, 1, SeqCst) {
       0 => {
         esp_ok!(esp_event_loop_create_default()).expect("failed to initialize default event loop");
-        EVENT_LOOP_STATE.store(2, Ordering::SeqCst);
+        EVENT_LOOP_STATE.store(2, SeqCst);
         return;
       },
       1 => continue,
@@ -290,14 +320,14 @@ fn get_mode() -> Result<wifi_mode_t, EspError> {
 }
 
 fn enter_ap_mode() {
-  if AP_COUNT.fetch_add(1, Ordering::SeqCst) > 0 {
+  if AP_COUNT.fetch_add(1, SeqCst) > 0 {
     return
   }
 
   let current_mode = get_mode().expect("failed to get WiFi mode");
 
   let new_mode = match current_mode {
-    wifi_mode_t::WIFI_MODE_AP => return,
+    wifi_mode_t::WIFI_MODE_AP | wifi_mode_t::WIFI_MODE_APSTA => return,
     wifi_mode_t::WIFI_MODE_NULL => wifi_mode_t::WIFI_MODE_AP,
     wifi_mode_t::WIFI_MODE_STA => wifi_mode_t::WIFI_MODE_APSTA,
     _ => unreachable!(),
@@ -307,7 +337,7 @@ fn enter_ap_mode() {
 }
 
 fn leave_ap_mode() {
-  if AP_COUNT.fetch_sub(1, Ordering::SeqCst) != 1 {
+  if AP_COUNT.fetch_sub(1, SeqCst) != 1 {
     return
   }
 
@@ -325,14 +355,14 @@ fn leave_ap_mode() {
 }
 
 fn enter_sta_mode() {
-  if STA_COUNT.fetch_add(1, Ordering::SeqCst) > 0 {
+  if STA_COUNT.fetch_add(1, SeqCst) > 0 {
     return
   }
 
   let current_mode = get_mode().expect("failed to get WiFi mode");
 
   let new_mode = match current_mode {
-    wifi_mode_t::WIFI_MODE_STA => return,
+    wifi_mode_t::WIFI_MODE_STA | wifi_mode_t::WIFI_MODE_APSTA => return,
     wifi_mode_t::WIFI_MODE_NULL => wifi_mode_t::WIFI_MODE_STA,
     wifi_mode_t::WIFI_MODE_AP => wifi_mode_t::WIFI_MODE_APSTA,
     _ => unreachable!(),
@@ -342,7 +372,7 @@ fn enter_sta_mode() {
 }
 
 fn leave_sta_mode() {
-  if STA_COUNT.fetch_sub(1, Ordering::SeqCst) != 1 {
+  if STA_COUNT.fetch_sub(1, SeqCst) != 1 {
     return
   }
 
@@ -364,7 +394,7 @@ static WIFI_ACTIVE: AtomicBool = AtomicBool::new(false);
 impl Wifi {
   /// Take the WiFi peripheral if it is not already in use.
   pub fn take() -> Option<Wifi> {
-    if WIFI_ACTIVE.compare_and_swap(false, true, Ordering::SeqCst) {
+    if WIFI_ACTIVE.compare_and_swap(false, true, SeqCst) {
       None
     } else {
       initialize_network_interface();
@@ -420,6 +450,13 @@ pub enum WifiRunning {
 }
 
 impl WifiRunning {
+  pub fn scan(&mut self, scan_config: &ScanConfig) -> ScanFuture {
+    match self {
+      Self::Sta(wifi) => wifi.scan(scan_config),
+      Self::Ap(wifi) => wifi.scan(scan_config),
+    }
+  }
+
   pub fn ip_info(&self) -> &IpInfo {
     match self {
       Self::Sta(wifi) => wifi.ip_info(),
@@ -451,7 +488,7 @@ impl<T> Drop for Wifi<T> {
       let _ = esp_ok!(esp_wifi_deinit());
       NonVolatileStorage::deinit_default();
 
-      WIFI_ACTIVE.store(false, Ordering::SeqCst);
+      WIFI_ACTIVE.store(false, SeqCst);
     }
   }
 }

@@ -2,6 +2,7 @@ use std::io::{self, Read, Write};
 use std::net::{SocketAddr, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::str;
+use std::time::Duration;
 
 use esp_idf_hal::{nvs::NameSpace, wifi::*};
 
@@ -21,11 +22,39 @@ fn ssid_and_password(params: &[u8]) -> (Option<Ssid>, Option<Password>) {
   (ssid, password)
 }
 
-fn handle_index(mut client: TcpStream) -> io::Result<()> {
+async fn handle_index(wifi: Arc<Mutex<Option<WifiRunning>>>, mut client: TcpStream) -> io::Result<()> {
+  let scan_config = ScanConfig::builder()
+    .show_hidden(true)
+    .scan_type(ScanType::Passive { max: Duration::from_millis(100) })
+    .build();
+
   writeln!(client, "HTTP/1.1 200 OK")?;
   writeln!(client, "Content-Type: text/html")?;
   writeln!(client)?;
-  writeln!(client, "{}", include_str!("index.html"))
+  writeln!(client, "{}", include_str!("index.html"))?;
+
+  writeln!(client, "<datalist id='ssids'>")?;
+
+  if let Some(wifi) = &mut *wifi.lock().unwrap() {
+    match wifi.scan(&scan_config).await {
+      Ok(mut aps) => {
+        aps.sort_by(|a, b| a.ssid().cmp(b.ssid()));
+        aps.dedup_by(|a, b| a.ssid() == b.ssid());
+
+        for ssid in aps.iter().map(|ap| ap.ssid()).filter(|ssid| !ssid.is_empty()) {
+          writeln!(client, "<option>{}</option>", ssid)?;
+        }
+
+      },
+      Err(err) => {
+        eprintln!("WiFi scan failed: {}", err);
+      }
+    }
+  }
+
+  writeln!(client, "</datalist>")?;
+
+  Ok(())
 }
 
 fn handle_hotspot_detect(mut client: TcpStream) -> io::Result<()> {
@@ -81,7 +110,7 @@ pub async fn handle_request(
       println!("{} {} - {} bytes", method, path, len);
 
       match (method, path) {
-        ("GET", "/") => handle_index(client),
+        ("GET", "/") => handle_index(Arc::clone(&wifi_running), client).await,
         ("GET", "/hotspot-detect.html") => handle_hotspot_detect(client),
         ("POST", "/connect") => {
           let res = handle_connecting(client);
