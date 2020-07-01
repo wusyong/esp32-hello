@@ -50,7 +50,6 @@ pub fn handle_request(socket: &UdpSocket, src: SocketAddr, request: Message, ip:
   socket.send_to(&response, src)
 }
 
-
 pub fn server() {
   println!("Starting DNS server …");
 
