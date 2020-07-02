@@ -7,7 +7,6 @@ use core::task::{Poll, Context, Waker};
 use std::time::Duration;
 
 use esp_idf_bindgen::{
-  libc,
   esp_wifi_scan_start,
   esp_wifi_scan_get_ap_num,
   esp_wifi_scan_get_ap_records,

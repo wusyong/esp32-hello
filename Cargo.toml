@@ -1,6 +1,5 @@
 [workspace]
 members = [
-  "esp-idf-bindgen",
   "esp-idf-hal",
   "app",
 ]
