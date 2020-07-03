@@ -1,5 +1,7 @@
 use std::{env, error::Error, fs::{remove_file, File}, io::stderr, os::unix::{fs::symlink, io::{FromRawFd, AsRawFd}}, path::PathBuf, process::Command};
 
+use jobserver::Client;
+
 fn main() -> Result<(), Box<dyn Error>> {
   println!("cargo:rerun-if-changed=Makefile");
   println!("cargo:rerun-if-changed=components/compiler_builtins/atomics.c");
@@ -24,25 +26,30 @@ fn main() -> Result<(), Box<dyn Error>> {
     create_idf_symlink()?;
   }
 
-  let stderr = unsafe { File::from_raw_fd(stderr().as_raw_fd()) };
-  let status = Command::new("make")
-    .arg("-j")
-    .arg("bootloader")
-    .env("VERBOSE", "1")
-    .stdout(stderr.try_clone()?)
-    .stderr(stderr.try_clone()?)
-    .status()?;
+  let client = unsafe { Client::from_env().expect("failed to connect to jobserver") };
 
+  let stderr = unsafe { File::from_raw_fd(stderr().as_raw_fd()) };
+
+  let mut cmd = Command::new("make");
+  cmd.arg("bootloader");
+  cmd.env("VERBOSE", "1");
+  cmd.stdout(stderr.try_clone()?);
+  cmd.stderr(stderr.try_clone()?);
+
+  client.configure(&mut cmd);
+
+  let status = cmd.status()?;
   assert!(status.success());
 
-  let status = Command::new("make")
-    .arg("-j")
-    .arg("app")
-    .env("VERBOSE", "1")
-    .stdout(stderr.try_clone()?)
-    .stderr(stderr.try_clone()?)
-    .status()?;
+  let mut cmd = Command::new("make");
+  cmd.arg("app");
+  cmd.env("VERBOSE", "1");
+  cmd.stdout(stderr.try_clone()?);
+  cmd.stderr(stderr.try_clone()?);
 
+  client.configure(&mut cmd);
+
+  let status = cmd.status()?;
   assert!(status.success());
 
   Ok(())

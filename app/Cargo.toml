@@ -15,3 +15,6 @@ httparse = "1"
 url = "2"
 futures = "0.3"
 macaddr = "1"
+
+[build-dependencies]
+jobserver = "0.1"
