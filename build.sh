@@ -56,7 +56,7 @@ fi
 
 export IDF_PATH
 
-IDF_TOOLS_PATH="$(pwd)/target/esp-idf-tools"
+IDF_TOOLS_PATH="$(pwd)/esp-idf-tools"
 export IDF_TOOLS_PATH
 
 mkdir -p "${IDF_TOOLS_PATH}"

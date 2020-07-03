@@ -56,7 +56,7 @@ jobs:
       - name: Cache ESP IDF Tools
         uses: actions/cache@v1
         with:
-          path: target/esp-idf-tools
+          path: esp-idf-tools
           key: esp-idf-tools-${{ steps.set_esp_idf_version.outputs.esp_idf_version }}
       - name: Build Project
         run: ./build.sh
