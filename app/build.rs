@@ -30,8 +30,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 
   let stderr = unsafe { File::from_raw_fd(stderr().as_raw_fd()) };
 
+  let cargo_makeflags = env::var_os("CARGO_MAKEFLAGS").expect("CARGO_MAKEFLAGS is unset");
+
   let mut cmd = Command::new("make");
   cmd.arg("bootloader");
+  cmd.env("MAKEFLAGS", &cargo_makeflags);
   cmd.env("VERBOSE", "1");
   cmd.stdout(stderr.try_clone()?);
   cmd.stderr(stderr.try_clone()?);
@@ -43,6 +46,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
   let mut cmd = Command::new("make");
   cmd.arg("app");
+  cmd.env("MAKEFLAGS", &cargo_makeflags);
   cmd.env("VERBOSE", "1");
   cmd.stdout(stderr.try_clone()?);
   cmd.stderr(stderr.try_clone()?);
