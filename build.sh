@@ -44,7 +44,7 @@ while (( ${#@} )); do
   shift
 done
 
-SERIAL_PORT="$(find /dev -name 'tty.usbserial-*' 2>/dev/null | head -n 1 || true)"
+SERIAL_PORT="$(find /dev -name 'ttyUSB*' 2>/dev/null | head -n 1 || true)"
 
 TARGET="xtensa-${CHIP}-none-elf"
 
